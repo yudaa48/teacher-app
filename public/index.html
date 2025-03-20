@@ -33,15 +33,9 @@
             display: flex;
             align-items: center;
         }
-        .header-left {
-            /* Logo container */
-        }
         .header-center {
             flex: 1;
             justify-content: center;
-        }
-        .header-right {
-            /* Save button container */
         }
         /* Increase the logo size by 30% (from 40px to 52px) */
         .header img {
@@ -164,7 +158,7 @@
     <h2 class="mb-4">Welcome to NISU Teacher</h2>
     <p class="mb-4">Please sign in with your Google account to continue</p>
     <div id="g_id_onload"
-         data-client_id="YOUR_GOOGLE_CLIENT_ID"
+         data-client_id="294376282666-lllnj1ro4d5qu3iq21nmmasr16tjije5.apps.googleusercontent.com"
          data-callback="handleCredentialResponse">
     </div>
     <div class="g_id_signin"
@@ -264,11 +258,87 @@
     let currentNotebook = null;
     let currentPlaylist = [];
     
-    // API endpoints (will be updated to use Google App Engine)
-    const API_BASE_URL = 'https://your-project-id.appspot.com/api'; // Update with your App Engine URL
+    // API endpoints - Update with your deployed App Engine URL
+    // const API_BASE_URL = 'https://your-project-id.appspot.com/api';
+    const API_BASE_URL = 'http://localhost:8080/api';
+    
+    // Check for authentication on page load
+    document.addEventListener('DOMContentLoaded', function() {
+        // Check if we already have a stored token
+        const storedAuthData = localStorage.getItem('authData');
+        if (storedAuthData) {
+            try {
+                const authData = JSON.parse(storedAuthData);
+                if (authData.token && authData.expiry > Date.now()) {
+                    // Token exists and hasn't expired
+                    userToken = authData.token;
+                    userData = authData.user;
+                    
+                    // Display user info
+                    document.getElementById('userAvatar').src = userData.picture;
+                    document.getElementById('userName').textContent = userData.name;
+                    document.getElementById('userProfile').style.display = 'flex';
+                    document.getElementById('logoutButton').style.display = 'block';
+                    
+                    // Hide login, show app
+                    document.getElementById('loginContainer').style.display = 'none';
+                    document.getElementById('appContent').style.display = 'block';
+                    
+                    // Fetch notebooks
+                    fetchNotebooks();
+                    return;
+                }
+            } catch (error) {
+                console.error('Error parsing stored auth data:', error);
+            }
+            // If we got here, token was invalid or expired
+            localStorage.removeItem('authData');
+        }
+        
+        // No valid stored token, show login
+        document.getElementById('loginContainer').style.display = 'block';
+        document.getElementById('appContent').style.display = 'none';
+    });
+    
+    // Handle first login (create user if needed)
+    async function handleFirstLogin() {
+        try {
+            const response = await fetch(`${API_BASE_URL}/first-user`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${userToken}`
+                }
+            });
+            
+            if (!response.ok) {
+                const data = await response.json();
+                if (response.status === 403) {
+                    // Not authorized
+                    alert('You are not authorized to access this application. Please contact an administrator.');
+                    handleSignOut();
+                    return false;
+                }
+            }
+            
+            return true;
+        } catch (error) {
+            console.error('Error handling first login:', error);
+            return false;
+        }
+    }
+    
+    // Parse the JWT token
+    function parseJwt(token) {
+        const base64Url = token.split('.')[1];
+        const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+        const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+            return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+        }).join(''));
+        return JSON.parse(jsonPayload);
+    }
     
     // Handle the Google Sign-In response
-    function handleCredentialResponse(response) {
+    async function handleCredentialResponse(response) {
         // Get the token
         userToken = response.credential;
         
@@ -279,6 +349,19 @@
             email: decodedToken.email,
             picture: decodedToken.picture
         };
+        
+        // Check if this is a valid user
+        const isAuthorized = await handleFirstLogin();
+        if (!isAuthorized) return;
+        
+        // Store in localStorage with expiry
+        // Set expiry to slightly less than the token expiry (exp is in seconds)
+        const expiry = decodedToken.exp * 1000; // Convert to milliseconds
+        localStorage.setItem('authData', JSON.stringify({
+            token: userToken,
+            user: userData,
+            expiry: expiry
+        }));
         
         // Display user information
         document.getElementById('userAvatar').src = userData.picture;
@@ -294,21 +377,14 @@
         fetchNotebooks();
     }
     
-    // Parse the JWT token
-    function parseJwt(token) {
-        const base64Url = token.split('.')[1];
-        const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-        const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
-            return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
-        }).join(''));
-        return JSON.parse(jsonPayload);
-    }
-    
     // Sign out function
     function handleSignOut() {
         google.accounts.id.disableAutoSelect();
         userData = null;
         userToken = '';
+        
+        // Clear stored auth data
+        localStorage.removeItem('authData');
         
         // Hide user profile and app content
         document.getElementById('userProfile').style.display = 'none';
@@ -645,7 +721,7 @@
     // Initialize Google Sign-In
     window.onload = function() {
         google.accounts.id.initialize({
-            client_id: "YOUR_GOOGLE_CLIENT_ID",
+            client_id: "294376282666-lllnj1ro4d5qu3iq21nmmasr16tjije5.apps.googleusercontent.com",
             callback: handleCredentialResponse
         });
         google.accounts.id.renderButton(

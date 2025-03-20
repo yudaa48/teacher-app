@@ -1,0 +1,16 @@
+indexes:
+- kind: Notebook
+  properties:
+  - name: createdBy
+  - name: name
+    direction: asc
+
+- kind: Progress
+  properties:
+  - name: userEmail
+  - name: notebookId
+
+- kind: User
+  properties:
+  - name: email
+  - name: role

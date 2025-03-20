@@ -9,6 +9,16 @@ const path = require('path');
 const app = express();
 app.use(express.json());
 app.use(cors());
+// Add proper CORS headers
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  if (req.method === 'OPTIONS') {
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE');
+    return res.status(200).json({});
+  }
+  next();
+});
 
 // Serve static files from the public directory
 app.use(express.static(path.join(__dirname, 'public')));
@@ -20,57 +30,126 @@ const PROGRESS_KIND = 'Progress';
 const USER_KIND = 'User';
 
 // Initialize Google OAuth client
-const CLIENT_ID = process.env.GOOGLE_CLIENT_ID || 'YOUR_GOOGLE_CLIENT_ID';
+const CLIENT_ID = '294376282666-lllnj1ro4d5qu3iq21nmmasr16tjije5.apps.googleusercontent.com';
 const client = new OAuth2Client(CLIENT_ID);
 
+const userRoleCache = new Map(); // Simple in-memory cache
+const CACHE_TTL = 300000; // 5 minutes in milliseconds
+
 // Authentication middleware
+// Add this to your authenticate middleware in app.js
 async function authenticate(req, res, next) {
-  try {
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({ error: 'Unauthorized: No token provided' });
+    try {
+      const authHeader = req.headers.authorization;
+      if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return res.status(401).json({ error: 'Unauthorized: No token provided' });
+      }
+  
+      const token = authHeader.split(' ')[1];
+      const ticket = await client.verifyIdToken({
+        idToken: token,
+        audience: CLIENT_ID
+      });
+  
+      const payload = ticket.getPayload();
+      
+      // Add token expiration check
+      const currentTime = Math.floor(Date.now() / 1000);
+      if (payload.exp < currentTime) {
+        return res.status(401).json({ error: 'Unauthorized: Token expired' });
+      }
+  
+      req.user = {
+        email: payload.email,
+        userId: payload.sub,
+        name: payload.name,
+        picture: payload.picture
+      };
+  
+      next();
+    } catch (error) {
+      console.error('Authentication error:', error);
+      res.status(401).json({ error: 'Unauthorized: Invalid token' });
     }
-
-    const token = authHeader.split(' ')[1];
-    const ticket = await client.verifyIdToken({
-      idToken: token,
-      audience: CLIENT_ID
-    });
-
-    const payload = ticket.getPayload();
-    req.user = {
-      email: payload.email,
-      userId: payload.sub,
-      name: payload.name,
-      picture: payload.picture
-    };
-
-    next();
-  } catch (error) {
-    console.error('Authentication error:', error);
-    res.status(401).json({ error: 'Unauthorized: Invalid token' });
   }
-}
 
 // Helper to determine if the user is an admin/teacher
 async function isTeacher(email) {
-  try {
-    const query = datastore
-      .createQuery(USER_KIND)
-      .filter('email', '=', email);
-    
-    const [users] = await datastore.runQuery(query);
-    
-    return users.length > 0 && users[0].role === 'teacher';
-  } catch (error) {
-    console.error('Error checking teacher role:', error);
-    return false;
+    try {
+      // Check cache first
+      const cachedData = userRoleCache.get(email);
+      if (cachedData && (Date.now() - cachedData.timestamp < CACHE_TTL)) {
+        return cachedData.isTeacher;
+      }
+      
+      // If not in cache or expired, query the database
+      const query = datastore
+        .createQuery(USER_KIND)
+        .filter('email', '=', email);
+      
+      const [users] = await datastore.runQuery(query);
+      
+      const isTeacherResult = users.length > 0 && users[0].role === 'teacher';
+      
+      // Update cache
+      userRoleCache.set(email, {
+        isTeacher: isTeacherResult,
+        timestamp: Date.now()
+      });
+      
+      return isTeacherResult;
+    } catch (error) {
+      console.error('Error checking teacher role:', error);
+      return false;
+    }
   }
-}
 
 // Root endpoint serves the main HTML file
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+// This handles the first login by creating a teacher user
+app.post('/api/first-user', authenticate, async (req, res) => {
+  try {
+    const userEmail = req.user.email;
+    
+    // Check if any users exist
+    const query = datastore.createQuery(USER_KIND);
+    const [users] = await datastore.runQuery(query);
+    
+    if (users.length === 0) {
+      // This is the first user, make them a teacher
+      const key = datastore.key(USER_KIND);
+      const userEntity = {
+        key: key,
+        data: {
+          email: userEmail,
+          role: 'teacher',
+          createdAt: new Date().toISOString()
+        }
+      };
+      
+      await datastore.save(userEntity);
+      res.json({ success: true, message: 'First user created as teacher' });
+    } else {
+      // Check if this user exists
+      const userQuery = datastore
+        .createQuery(USER_KIND)
+        .filter('email', '=', userEmail);
+      
+      const [existingUsers] = await datastore.runQuery(userQuery);
+      
+      if (existingUsers.length === 0) {
+        res.status(403).json({ error: 'Not authorized. Contact an administrator.' });
+      } else {
+        res.json({ success: true, message: 'User already exists' });
+      }
+    }
+  } catch (error) {
+    console.error('Error creating first user:', error);
+    res.status(500).json({ error: 'Failed to create user' });
+  }
 });
 
 // API endpoint to get all notebooks for a teacher
@@ -80,8 +159,11 @@ app.get('/api/notebooks', authenticate, async (req, res) => {
     
     // Check if user is a teacher
     if (!(await isTeacher(userEmail))) {
+      console.log(`User ${userEmail} attempted to access notebooks but is not a teacher`);
       return res.status(403).json({ error: 'Not authorized to access notebooks' });
     }
+    
+    console.log(`Fetching notebooks for user: ${userEmail}`);
     
     // Query for notebooks created by this teacher
     const query = datastore
@@ -89,10 +171,12 @@ app.get('/api/notebooks', authenticate, async (req, res) => {
       .filter('createdBy', '=', userEmail);
     
     const [notebooks] = await datastore.runQuery(query);
+    console.log(`Found ${notebooks.length} notebooks for user ${userEmail}`);
     
     res.json({ notebooks });
   } catch (error) {
-    console.error('Error fetching notebooks:', error);
+    console.error(`Database error fetching notebooks: ${error.message}`);
+    console.error(error.stack);
     res.status(500).json({ error: 'Failed to fetch notebooks' });
   }
 });
