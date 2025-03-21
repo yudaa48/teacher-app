@@ -439,6 +439,49 @@ app.post('/api/users/register', authenticate, async (req, res) => {
   }
 });
 
+// Add this endpoint to your app.js file
+app.delete('/api/notebooks/:notebookId', authenticate, async (req, res) => {
+  try {
+    const userEmail = req.user.email;
+    const { notebookId } = req.params;
+    
+    // Check if user is a teacher
+    if (!(await isTeacher(userEmail))) {
+      return res.status(403).json({ error: 'Not authorized to delete notebooks' });
+    }
+    
+    // Get the notebook
+    let key;
+    
+    // Check if notebookId is a number (ID) or string (name)
+    if (!isNaN(notebookId)) {
+      key = datastore.key([NOTEBOOK_KIND, datastore.int(notebookId)]);
+    } else {
+      // Find the notebook by name
+      const query = datastore
+        .createQuery(NOTEBOOK_KIND)
+        .filter('name', '=', notebookId)
+        .filter('createdBy', '=', userEmail);
+      
+      const [notebooks] = await datastore.runQuery(query);
+      
+      if (notebooks.length === 0) {
+        return res.status(404).json({ error: 'Notebook not found' });
+      }
+      
+      key = notebooks[0][datastore.KEY];
+    }
+    
+    // Delete the notebook
+    await datastore.delete(key);
+    
+    res.json({ success: true, message: 'Notebook deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting notebook:', error);
+    res.status(500).json({ error: 'Failed to delete notebook' });
+  }
+});
+
 // Initialize migration endpoint to import existing JSON data
 app.post('/api/migrate', authenticate, async (req, res) => {
   try {

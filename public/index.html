@@ -576,9 +576,28 @@
         
         notebooks.forEach(notebook => {
             const notebookItem = document.createElement('div');
-            notebookItem.className = 'notebook-item';
-            notebookItem.textContent = notebook.name;
-            notebookItem.onclick = () => selectNotebook(notebook);
+            notebookItem.className = 'notebook-item d-flex justify-content-between align-items-center';
+            
+            // Create the name span
+            const nameSpan = document.createElement('span');
+            nameSpan.textContent = notebook.name;
+            nameSpan.style.cursor = 'pointer';
+            nameSpan.onclick = () => selectNotebook(notebook);
+            
+            // Create delete button
+            const deleteBtn = document.createElement('button');
+            deleteBtn.className = 'btn btn-sm btn-danger';
+            deleteBtn.innerHTML = '&times;';
+            deleteBtn.style.fontSize = '12px';
+            deleteBtn.style.marginLeft = '5px';
+            deleteBtn.onclick = (e) => {
+                e.stopPropagation(); // Prevent opening the notebook when clicking delete
+                deleteNotebook(notebook);
+            };
+            
+            // Add elements to the notebook item
+            notebookItem.appendChild(nameSpan);
+            notebookItem.appendChild(deleteBtn);
             
             if (currentNotebook && notebook.name === currentNotebook.name) {
                 notebookItem.classList.add('active');
@@ -586,6 +605,47 @@
             
             notebookList.appendChild(notebookItem);
         });
+    }
+
+    // Add this function to your script
+    async function deleteNotebook(notebook) {
+        // Confirm deletion
+        if (!confirm(`Are you sure you want to delete the notebook "${notebook.name}"?`)) {
+            return;
+        }
+        
+        try {
+            const response = await fetch(`${API_BASE_URL}/notebooks/${notebook.id || notebook.name}`, {
+                method: 'DELETE',
+                headers: {
+                    'Authorization': `Bearer ${userToken}`
+                }
+            });
+            
+            if (!response.ok) {
+                throw new Error('Failed to delete notebook');
+            }
+            
+            // Remove from the notebooks array
+            notebooks = notebooks.filter(n => n.name !== notebook.name);
+            
+            // If the deleted notebook was the current one
+            if (currentNotebook && currentNotebook.name === notebook.name) {
+                currentNotebook = null;
+                currentPlaylist = [];
+                document.getElementById('currentNotebookName').textContent = 'Select a Notebook';
+                document.getElementById('addItemForm').style.display = 'none';
+                document.getElementById('exportButton').style.display = 'none';
+                document.getElementById('commandList').innerHTML = '';
+            }
+            
+            // Refresh the notebooks list
+            displayNotebooks();
+            
+        } catch (error) {
+            console.error('Error deleting notebook:', error);
+            alert('Error deleting notebook: ' + error.message);
+        }
     }
     
     // Select a notebook and load its content
