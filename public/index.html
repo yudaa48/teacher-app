@@ -139,12 +139,12 @@
         <h1>NISU Teacher</h1>
     </div>
     <div class="header-right">
-        <!-- User profile info will appear here after login -->
         <div id="userProfile" class="user-profile" style="display: none;">
             <img id="userAvatar" src="" alt="User">
             <span id="userName"></span>
         </div>
         <button id="logoutButton" class="btn btn-outline-light" style="display: none;" onclick="handleSignOut()">Sign Out</button>
+        <button id="manageUsersBtn" class="btn btn-outline-light ms-2" style="display: none;">Manage Users</button>
         <button id="saveButton" class="btn btn-success ms-2" onclick="saveChanges()" style="display: none;">Save Changes</button>
     </div>
     <div id="saveMessage" class="save-message">Saved!</div>
@@ -247,6 +247,32 @@
         </div>
     </div>
 </div>
+
+<!-- User Registration Modal -->
+<div class="modal fade" id="userRegistrationModal" tabindex="-1" aria-labelledby="userRegistrationModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="userRegistrationModalLabel">Register New Teacher</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label for="teacherEmail" class="form-label">Teacher Email</label>
+                    <input type="email" class="form-control" id="teacherEmail" placeholder="Enter email address">
+                </div>
+                <div id="registrationMessage" class="alert" style="display: none;"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="registerTeacherBtn">Register</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add a button to open the modal in your header or sidebar -->
+<button id="manageUsersBtn" class="btn btn-outline-light ms-2" style="display: none;">Manage Users</button>
 
 <script>
     // Google Auth variables
@@ -393,6 +419,114 @@
         
         // Show login screen
         document.getElementById('loginContainer').style.display = 'block';
+    }
+
+    // Show manage users button after login
+    document.addEventListener('DOMContentLoaded', function() {
+        // Add this to your existing authentication check code
+        if (localStorage.getItem('authData')) {
+            // Show manage users button for admins/teachers
+            document.getElementById('manageUsersBtn').style.display = 'block';
+        }
+    });
+
+    // Add event listeners once DOM is loaded
+    document.addEventListener('DOMContentLoaded', function() {
+        // Add the manage users button click event
+        const manageUsersBtn = document.getElementById('manageUsersBtn');
+        if (manageUsersBtn) {
+            manageUsersBtn.addEventListener('click', showUserRegistrationModal);
+        }
+        
+        // Add register button click event
+        const registerTeacherBtn = document.getElementById('registerTeacherBtn');
+        if (registerTeacherBtn) {
+            registerTeacherBtn.addEventListener('click', registerNewTeacher);
+        }
+    });
+
+    // Function to show the user registration modal
+    function showUserRegistrationModal() {
+        const modal = new bootstrap.Modal(document.getElementById('userRegistrationModal'));
+        
+        // Clear previous values and messages - with null checks
+        const emailInput = document.getElementById('teacherEmail');
+        if (emailInput) emailInput.value = '';
+        
+        const messageElement = document.getElementById('registrationMessage');
+        if (messageElement) {
+            messageElement.style.display = 'none';
+            messageElement.textContent = '';
+            messageElement.className = 'alert';
+        }
+        
+        modal.show();
+    }
+
+    // Function to register a new teacher
+    // Function to register a new teacher
+    async function registerNewTeacher() {
+        const emailInput = document.getElementById('teacherEmail');
+        const messageElement = document.getElementById('registrationMessage');
+        
+        // Reset message
+        messageElement.style.display = 'none';
+        messageElement.textContent = '';
+        
+        // Validate email
+        const email = emailInput.value.trim();
+        if (!email || !email.includes('@')) {
+            messageElement.textContent = 'Please enter a valid email address.';
+            messageElement.className = 'alert alert-danger';
+            messageElement.style.display = 'block';
+            return;
+        }
+        
+        try {
+            // Get token from local storage
+            const authData = JSON.parse(localStorage.getItem('authData'));
+            if (!authData || !authData.token) {
+                throw new Error('You must be logged in to register teachers.');
+            }
+            
+            // Send registration request
+            const response = await fetch(`${API_BASE_URL}/users/register`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${authData.token}`
+                },
+                body: JSON.stringify({
+                    email: email,
+                    role: 'teacher'
+                })
+            });
+            
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'Failed to register teacher.');
+            }
+            
+            // Show success message
+            messageElement.textContent = 'Teacher registered successfully!';
+            messageElement.className = 'alert alert-success';
+            messageElement.style.display = 'block';
+            
+            // Clear the form after success
+            emailInput.value = '';
+            
+            // Automatically close the modal after 2 seconds
+            setTimeout(() => {
+                bootstrap.Modal.getInstance(document.getElementById('userRegistrationModal')).hide();
+            }, 2000);
+            
+        } catch (error) {
+            // Show error message
+            messageElement.textContent = error.message;
+            messageElement.className = 'alert alert-danger';
+            messageElement.style.display = 'block';
+            console.error('Registration error:', error);
+        }
     }
 
     // Fetch all notebooks for the current user

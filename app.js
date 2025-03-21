@@ -73,6 +73,38 @@ async function authenticate(req, res, next) {
     }
   }
 
+// Add this to your app.js
+async function isAdmin(email) {
+  try {
+    const query = datastore
+      .createQuery(USER_KIND)
+      .filter('email', '=', email);
+    
+    const [users] = await datastore.runQuery(query);
+    
+    return users.length > 0 && users[0].role === 'admin';
+  } catch (error) {
+    console.error('Error checking admin role:', error);
+    return false;
+  }
+}
+
+// Create a middleware for admin-only routes
+function requireAdmin(req, res, next) {
+  const userEmail = req.user.email;
+  
+  isAdmin(userEmail).then(isUserAdmin => {
+    if (isUserAdmin) {
+      next(); // User is an admin, proceed
+    } else {
+      res.status(403).json({ error: 'Admin access required' });
+    }
+  }).catch(error => {
+    console.error('Error in admin check:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  });
+}
+
 // Helper to determine if the user is an admin/teacher
 async function isTeacher(email) {
     try {
@@ -371,25 +403,24 @@ app.post('/api/progress/:notebookId', authenticate, async (req, res) => {
   }
 });
 
-// API endpoint to register a teacher/admin
+// API endpoint to register a teacher
 app.post('/api/users/register', authenticate, async (req, res) => {
   try {
     const adminEmail = req.user.email;
-    const { email, role } = req.body;
+    const { email } = req.body;
     
-    // Check if the current user is already an admin
-    // This is basic authorization - you might want to enhance this
+    // Check if the current user is already registered
     if (!(await isTeacher(adminEmail))) {
-      return res.status(403).json({ error: 'Not authorized to register users' });
+      return res.status(403).json({ error: 'Not authorized to register teachers' });
     }
     
-    // Create a new user
+    // Create a new teacher user
     const key = datastore.key(USER_KIND);
     const userEntity = {
       key: key,
       data: {
         email: email,
-        role: role || 'teacher',
+        role: 'teacher',
         registeredBy: adminEmail,
         createdAt: new Date().toISOString()
       }
@@ -400,11 +431,11 @@ app.post('/api/users/register', authenticate, async (req, res) => {
     
     res.json({ 
       success: true, 
-      message: 'User registered successfully'
+      message: 'Teacher registered successfully'
     });
   } catch (error) {
-    console.error('Error registering user:', error);
-    res.status(500).json({ error: 'Failed to register user' });
+    console.error('Error registering teacher:', error);
+    res.status(500).json({ error: 'Failed to register teacher' });
   }
 });
 
