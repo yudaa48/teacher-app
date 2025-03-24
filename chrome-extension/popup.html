@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>NISU Extension</title>
+    <style>
+        body {
+            font-family: 'Google Sans', Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            width: 320px;
+            max-height: 600px;
+            overflow: hidden;
+        }
+        
+        .container {
+            padding: 16px;
+        }
+        
+        .header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 16px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        
+        .header img {
+            width: 40px;
+            height: 40px;
+            margin-right: 12px;
+        }
+        
+        .header h1 {
+            margin: 0;
+            font-size: 18px;
+            font-weight: 500;
+            color: #1a73e8;
+        }
+        
+        .login-view, .user-view {
+            display: none;
+        }
+        
+        .button {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            padding: 10px 16px;
+            border: none;
+            border-radius: 4px;
+            background-color: #1a73e8;
+            color: white;
+            font-family: 'Google Sans', Arial, sans-serif;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            margin-top: 12px;
+        }
+        
+        .button:hover {
+            background-color: #1765cc;
+        }
+        
+        .button.secondary {
+            background-color: #f1f3f4;
+            color: #1a73e8;
+        }
+        
+        .button.secondary:hover {
+            background-color: #e8eaed;
+        }
+        
+        .user-info {
+            display: flex;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+        
+        .user-info img {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            margin-right: 12px;
+        }
+        
+        .user-info .name {
+            font-weight: 500;
+        }
+        
+        .user-info .email {
+            font-size: 12px;
+            color: #5f6368;
+        }
+        
+        .section {
+            margin-bottom: 16px;
+        }
+        
+        .section-title {
+            font-size: 14px;
+            font-weight: 500;
+            margin-bottom: 8px;
+            color: #202124;
+        }
+        
+        .notebook-list {
+            max-height: 200px;
+            overflow-y: auto;
+            border: 1px solid #e0e0e0;
+            border-radius: 4px;
+        }
+        
+        .notebook-item {
+            padding: 8px 12px;
+            border-bottom: 1px solid #e0e0e0;
+            cursor: pointer;
+        }
+        
+        .notebook-item:last-child {
+            border-bottom: none;
+        }
+        
+        .notebook-item:hover {
+            background-color: #f1f3f4;
+        }
+        
+        .status-message {
+            font-size: 14px;
+            color: #5f6368;
+            margin: 16px 0;
+            text-align: center;
+        }
+        
+        .loader {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #1a73e8;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+            margin: 16px auto;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+    <script src="popup.js" defer></script>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <img src="nisuext.png" alt="NISU Logo">
+            <h1>NISU Extension</h1>
+        </div>
+        
+        <!-- Login View -->
+        <div id="loginView" class="login-view">
+            <p>Sign in to access your learning materials in NotebookLM.</p>
+            <button id="signInButton" class="button">Sign in with Google</button>
+            <div id="loginStatus" class="status-message"></div>
+            <div id="loginLoader" class="loader" style="display: none;"></div>
+        </div>
+        
+        <!-- User View (after authentication) -->
+        <div id="userView" class="user-view">
+            <div class="user-info">
+                <img id="userAvatar" src="" alt="User">
+                <div>
+                    <div id="userName" class="name"></div>
+                    <div id="userEmail" class="email"></div>
+                </div>
+            </div>
+            
+            <div class="section">
+                <div class="section-title">Your Notebooks</div>
+                <div id="notebookList" class="notebook-list">
+                    <!-- Notebooks will be listed here -->
+                </div>
+            </div>
+            
+            <div id="statusMessage" class="status-message">
+                Click on a notebook to activate the NISU helper.
+            </div>
+            
+            <button id="activateButton" class="button">Activate on Current Page</button>
+            <button id="signOutButton" class="button secondary">Sign Out</button>
+        </div>
+        
+        <!-- Loading View -->
+        <div id="loadingView">
+            <div class="loader"></div>
+            <div class="status-message">Loading...</div>
+        </div>
+    </div>
+</body>
+</html>

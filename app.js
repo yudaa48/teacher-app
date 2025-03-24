@@ -4,6 +4,7 @@ const { Datastore } = require('@google-cloud/datastore');
 const { OAuth2Client } = require('google-auth-library');
 const cors = require('cors');
 const path = require('path');
+require('dotenv').config();
 
 // Initialize Express
 const app = express();
@@ -30,8 +31,9 @@ const PROGRESS_KIND = 'Progress';
 const USER_KIND = 'User';
 
 // Initialize Google OAuth client
-const CLIENT_ID = '294376282666-lllnj1ro4d5qu3iq21nmmasr16tjije5.apps.googleusercontent.com';
-const client = new OAuth2Client(CLIENT_ID);
+const CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
+const CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
+const client = new OAuth2Client(CLIENT_ID, CLIENT_SECRET);
 
 const userRoleCache = new Map(); // Simple in-memory cache
 const CACHE_TTL = 300000; // 5 minutes in milliseconds
@@ -479,6 +481,636 @@ app.delete('/api/notebooks/:notebookId', authenticate, async (req, res) => {
   } catch (error) {
     console.error('Error deleting notebook:', error);
     res.status(500).json({ error: 'Failed to delete notebook' });
+  }
+});
+
+// Constants for student entities
+const STUDENT_KIND = 'Student';
+const NOTEBOOK_STUDENT_KIND = 'NotebookStudent';
+
+// Add a route to handle Google authentication for students
+app.get('/api/auth/google', (req, res) => {
+  const redirectUri = `${req.protocol}://${req.get('host')}/api/auth/google/callback`;
+  console.log('Using redirect URI:', redirectUri);
+  
+  const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${CLIENT_ID}&response_type=code&scope=email%20profile&redirect_uri=${encodeURIComponent(redirectUri)}&prompt=select_account`;
+  
+  res.redirect(authUrl);
+});
+
+// Handle the OAuth callback
+app.get('/api/auth/google/callback', async (req, res) => {
+  try {
+    const code = req.query.code;
+    
+    if (!code) {
+      // Return a JSON error response instead of HTML
+      return res.status(400).json({ error: 'No authentication code received' });
+    }
+    
+    // Exchange the code for tokens - include the client_secret
+    const tokenResponse = await client.getToken({
+      code: code,
+      client_id: CLIENT_ID,
+      client_secret: CLIENT_SECRET, // Add this line with your client secret
+      redirect_uri: `${req.protocol}://${req.get('host')}/api/auth/google/callback`
+    });
+    
+    const idToken = tokenResponse.tokens.id_token;
+    
+    // Verify the token
+    const ticket = await client.verifyIdToken({
+      idToken: idToken,
+      audience: CLIENT_ID
+    });
+    
+    const payload = ticket.getPayload();
+    
+    // Check if this student exists in our database
+    const query = datastore
+      .createQuery(STUDENT_KIND)
+      .filter('email', '=', payload.email);
+    
+    const [students] = await datastore.runQuery(query);
+    
+    let student;
+    if (students.length === 0) {
+      // This is a new student, create a record
+      console.log(`Creating new student record for ${payload.email}`);
+      const studentKey = datastore.key(STUDENT_KIND);
+      const studentEntity = {
+        key: studentKey,
+        data: {
+          email: payload.email,
+          name: payload.name,
+          picture: payload.picture,
+          createdAt: new Date().toISOString()
+        }
+      };
+      
+      await datastore.save(studentEntity);
+      
+      // Get the student with its key
+      const [newStudent] = await datastore.get(studentKey);
+      student = {
+        id: studentKey.id,
+        ...newStudent
+      };
+      
+      // Check for notebook assignments or create a default one
+      const assignmentQuery = datastore
+        .createQuery(NOTEBOOK_STUDENT_KIND)
+        .filter('studentEmail', '=', payload.email);
+      
+      const [assignments] = await datastore.runQuery(assignmentQuery);
+      
+      // If no assignments and a default notebook ID is available, create an assignment
+      if (assignments.length === 0) {
+        // Try to find a notebook to assign
+        const notebookQuery = datastore.createQuery(NOTEBOOK_KIND).limit(1);
+        const [notebooks] = await datastore.runQuery(notebookQuery);
+        
+        if (notebooks.length > 0) {
+          const defaultNotebookId = notebooks[0][datastore.KEY].id.toString();
+          
+          const assignmentKey = datastore.key(NOTEBOOK_STUDENT_KIND);
+          const assignmentEntity = {
+            key: assignmentKey,
+            data: {
+              notebookId: defaultNotebookId,
+              studentEmail: payload.email,
+              assignedBy: "system",
+              assignedAt: new Date().toISOString()
+            }
+          };
+          
+          await datastore.save(assignmentEntity);
+          console.log(`Assigned student to notebook: ${defaultNotebookId}`);
+        }
+      }
+    } else {
+      // Existing student
+      student = {
+        id: students[0][datastore.KEY].id,
+        ...students[0]
+      };
+    }
+    
+    // Create a custom token that includes the student info
+    const userData = {
+      id: student.id,
+      email: student.email,
+      name: student.name,
+      picture: student.picture || null
+    };
+    
+    // Return JSON instead of HTML - this will be processed by our background script
+    res.json({
+      success: true,
+      token: idToken,
+      userData: userData
+    });
+  } catch (error) {
+    console.error('Authentication error:', error);
+    res.status(400).json({ 
+      success: false,
+      error: `Authentication failed: ${error.message}` 
+    });
+  }
+});
+
+// Student Authentication middleware
+async function authenticateStudent(req, res, next) {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'Unauthorized: No token provided' });
+    }
+
+    const token = authHeader.split(' ')[1];
+    const ticket = await client.verifyIdToken({
+      idToken: token,
+      audience: CLIENT_ID
+    });
+
+    const payload = ticket.getPayload();
+    
+    // Check if this student exists in our database
+    const query = datastore
+      .createQuery(STUDENT_KIND)
+      .filter('email', '=', payload.email);
+    
+    const [students] = await datastore.runQuery(query);
+    
+    let studentId;
+    
+    if (students.length === 0) {
+      // *** ADD THIS SECTION TO AUTO-CREATE STUDENT RECORD ***
+      console.log(`Student ${payload.email} not found. Creating record...`);
+      
+      // Create a new student entity
+      const studentKey = datastore.key(STUDENT_KIND);
+      const studentEntity = {
+        key: studentKey,
+        data: {
+          email: payload.email,
+          name: payload.name,
+          picture: payload.picture,
+          createdAt: new Date().toISOString()
+        }
+      };
+      
+      await datastore.save(studentEntity);
+      studentId = studentKey.id;
+      console.log(`Created student record with ID: ${studentId}`);
+      // *** END OF NEW SECTION ***
+    } else {
+      studentId = students[0][datastore.KEY].id;
+    }
+
+    req.student = {
+      email: payload.email,
+      id: studentId,
+      name: payload.name
+    };
+
+    next();
+  } catch (error) {
+    console.error('Student authentication error:', error);
+    res.status(401).json({ error: 'Unauthorized: Invalid token' });
+  }
+}
+
+// API endpoint to get notebooks for a student
+app.get('/api/students/notebooks', authenticateStudent, async (req, res) => {
+  try {
+    const studentEmail = req.student.email;
+    
+    // Query for notebooks assigned to this student
+    const query = datastore
+      .createQuery(NOTEBOOK_STUDENT_KIND)
+      .filter('studentEmail', '=', studentEmail);
+    
+    const [assignedNotebooks] = await datastore.runQuery(query);
+    
+    if (assignedNotebooks.length === 0) {
+      return res.json({ notebooks: [] });
+    }
+    
+    // Get the actual notebooks
+    const notebooks = [];
+    for (const assignment of assignedNotebooks) {
+      const notebookKey = datastore.key([NOTEBOOK_KIND, parseInt(assignment.notebookId)]);
+      const [notebook] = await datastore.get(notebookKey);
+      
+      if (notebook) {
+        notebooks.push({
+          id: assignment.notebookId,
+          name: notebook.name,
+          createdBy: notebook.createdBy,
+          updatedAt: notebook.updatedAt
+        });
+      }
+    }
+    
+    res.json({ notebooks });
+  } catch (error) {
+    console.error('Error fetching student notebooks:', error);
+    res.status(500).json({ error: 'Failed to fetch notebooks' });
+  }
+});
+
+// API endpoint to get a specific notebook's playlist for a student
+app.get('/api/students/notebooks/:notebookName/playlist', authenticateStudent, async (req, res) => {
+  try {
+    const studentEmail = req.student.email;
+    const { notebookName } = req.params;
+    
+    // Find the notebook by name
+    const notebookQuery = datastore
+      .createQuery(NOTEBOOK_KIND)
+      .filter('name', '=', notebookName);
+    
+    const [notebooks] = await datastore.runQuery(notebookQuery);
+    
+    if (notebooks.length === 0) {
+      return res.status(404).json({ error: 'Notebook not found' });
+    }
+    
+    const notebook = notebooks[0];
+    const notebookId = notebooks[0][datastore.KEY].id;
+    
+    // Check if the student has access to this notebook
+    const assignmentQuery = datastore
+      .createQuery(NOTEBOOK_STUDENT_KIND)
+      .filter('notebookId', '=', notebookId.toString())
+      .filter('studentEmail', '=', studentEmail);
+    
+    const [assignments] = await datastore.runQuery(assignmentQuery);
+    
+    if (assignments.length === 0) {
+      return res.status(403).json({ error: 'You do not have access to this notebook' });
+    }
+    
+    // Get the student's progress for this notebook
+    const progressKey = `${notebookId}_${studentEmail}`;
+    const progressQuery = datastore
+      .createQuery(PROGRESS_KIND)
+      .filter('progressKey', '=', progressKey);
+    
+    const [progressRecords] = await datastore.runQuery(progressQuery);
+    const completedItems = progressRecords.length > 0 ? progressRecords[0].completedItems || [] : [];
+    
+    // Create the playlist with completion status
+    const playlist = notebook.playlist.map(item => {
+      return {
+        ...item,
+        status: completedItems.includes(item.id) ? 'complete' : 'pending'
+      };
+    });
+    
+    // Format the response like the existing JSON structure
+    res.json({
+      playlist: playlist
+    });
+  } catch (error) {
+    console.error('Error fetching notebook playlist:', error);
+    res.status(500).json({ error: 'Failed to fetch playlist' });
+  }
+});
+
+// API endpoint to update a student's progress
+app.post('/api/students/progress', authenticateStudent, async (req, res) => {
+  try {
+    const studentEmail = req.student.email;
+    let { notebookId, notebookName, itemId, completed } = req.body;
+    
+    if (!notebookId && !notebookName) {
+      return res.status(400).json({ error: 'Notebook ID or Name is required' });
+    }
+    
+    if (!itemId) {
+      return res.status(400).json({ error: 'Item ID is required' });
+    }
+    
+    // If we got a name but not an ID, try to find the notebook by name
+    if (!notebookId && notebookName) {
+      const notebookQuery = datastore
+        .createQuery(NOTEBOOK_KIND)
+        .filter('name', '=', notebookName);
+      
+      const [notebooks] = await datastore.runQuery(notebookQuery);
+      
+      if (notebooks.length > 0) {
+        notebookId = notebooks[0][datastore.KEY].id.toString();
+      } else {
+        return res.status(404).json({ error: 'Notebook not found by name' });
+      }
+    }
+    
+    // Construct the progress key
+    const progressKey = `${notebookId}_${studentEmail}`;
+    
+  } catch (error) {
+    console.error('Error updating progress:', error);
+    res.status(500).json({ error: 'Failed to update progress' });
+  }
+});
+
+// API endpoint for teachers to assign students to notebooks
+app.post('/api/notebooks/:notebookId/students', authenticate, async (req, res) => {
+  try {
+    const { notebookId } = req.params;
+    const { students } = req.body; // Array of student emails
+    const teacherEmail = req.user.email;
+    
+    // Check if user is a teacher
+    if (!(await isTeacher(teacherEmail))) {
+      return res.status(403).json({ error: 'Not authorized to assign students' });
+    }
+    
+    // Verify the notebook exists and belongs to this teacher
+    const notebookKey = datastore.key([NOTEBOOK_KIND, parseInt(notebookId)]);
+    const [notebook] = await datastore.get(notebookKey);
+    
+    if (!notebook) {
+      return res.status(404).json({ error: 'Notebook not found' });
+    }
+    
+    if (notebook.createdBy !== teacherEmail) {
+      return res.status(403).json({ error: 'Not authorized to modify this notebook' });
+    }
+    
+    // Add each student to the notebook
+    const assignments = [];
+    for (const studentEmail of students) {
+      // Create a unique assignment key
+      const assignmentKey = datastore.key(NOTEBOOK_STUDENT_KIND);
+      
+      const assignmentEntity = {
+        key: assignmentKey,
+        data: {
+          notebookId: notebookId,
+          studentEmail: studentEmail,
+          assignedBy: teacherEmail,
+          assignedAt: new Date().toISOString()
+        }
+      };
+      
+      assignments.push(assignmentEntity);
+    }
+    
+    // Save all assignments in a batch
+    if (assignments.length > 0) {
+      await datastore.save(assignments);
+    }
+    
+    res.json({
+      success: true,
+      message: `${assignments.length} students assigned to notebook`
+    });
+  } catch (error) {
+    console.error('Error assigning students:', error);
+    res.status(500).json({ error: 'Failed to assign students' });
+  }
+});
+
+// API endpoint for teachers to import students via CSV
+app.post('/api/students/import', authenticate, async (req, res) => {
+  try {
+    const { notebookId, csvData } = req.body;
+    const teacherEmail = req.user.email;
+    
+    // Check if user is a teacher
+    if (!(await isTeacher(teacherEmail))) {
+      return res.status(403).json({ error: 'Not authorized to import students' });
+    }
+    
+    // Verify the notebook exists and belongs to this teacher
+    if (notebookId) {
+      const notebookKey = datastore.key([NOTEBOOK_KIND, parseInt(notebookId)]);
+      const [notebook] = await datastore.get(notebookKey);
+      
+      if (!notebook) {
+        return res.status(404).json({ error: 'Notebook not found' });
+      }
+      
+      if (notebook.createdBy !== teacherEmail) {
+        return res.status(403).json({ error: 'Not authorized to modify this notebook' });
+      }
+    }
+    
+    // Parse CSV data (assuming format: email,name)
+    const studentEmails = [];
+    const csvLines = csvData.split('\n');
+    
+    for (const line of csvLines) {
+      const trimmedLine = line.trim();
+      if (!trimmedLine) continue;
+      
+      const parts = trimmedLine.split(',');
+      const email = parts[0].trim();
+      
+      // Simple validation
+      if (email && email.includes('@')) {
+        studentEmails.push(email);
+      }
+    }
+    
+    // If notebookId is provided, assign all these students to the notebook
+    if (notebookId) {
+      const assignments = [];
+      for (const studentEmail of studentEmails) {
+        // Create a unique assignment key
+        const assignmentKey = datastore.key(NOTEBOOK_STUDENT_KIND);
+        
+        const assignmentEntity = {
+          key: assignmentKey,
+          data: {
+            notebookId: notebookId,
+            studentEmail: studentEmail,
+            assignedBy: teacherEmail,
+            assignedAt: new Date().toISOString()
+          }
+        };
+        
+        assignments.push(assignmentEntity);
+      }
+      
+      // Save all assignments in a batch
+      if (assignments.length > 0) {
+        await datastore.save(assignments);
+      }
+    }
+    
+    res.json({
+      success: true,
+      message: `${studentEmails.length} students imported`,
+      students: studentEmails
+    });
+  } catch (error) {
+    console.error('Error importing students:', error);
+    res.status(500).json({ error: 'Failed to import students' });
+  }
+});
+
+// Helper function to check if an email is assigned to a notebook
+async function isStudentAssignedToNotebook(studentEmail, notebookId) {
+  const query = datastore
+    .createQuery(NOTEBOOK_STUDENT_KIND)
+    .filter('notebookId', '=', notebookId.toString())
+    .filter('studentEmail', '=', studentEmail);
+  
+  const [assignments] = await datastore.runQuery(query);
+  return assignments.length > 0;
+}
+
+// Student Authentication middleware with auto-creation
+async function authenticateStudent(req, res, next) {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'Unauthorized: No token provided' });
+    }
+
+    const token = authHeader.split(' ')[1];
+    const ticket = await client.verifyIdToken({
+      idToken: token,
+      audience: CLIENT_ID
+    });
+
+    const payload = ticket.getPayload();
+    console.log("Student auth payload:", payload.email);
+    
+    // Check if this student exists in our database
+    const query = datastore
+      .createQuery(STUDENT_KIND)
+      .filter('email', '=', payload.email);
+    
+    const [students] = await datastore.runQuery(query);
+    
+    let studentId;
+    
+    if (students.length === 0) {
+      // Auto-create a student record
+      console.log(`Student ${payload.email} not found. Creating record...`);
+      
+      // Create a new student entity
+      const studentKey = datastore.key(STUDENT_KIND);
+      const studentEntity = {
+        key: studentKey,
+        data: {
+          email: payload.email,
+          name: payload.name,
+          picture: payload.picture,
+          createdAt: new Date().toISOString()
+        }
+      };
+      
+      await datastore.save(studentEntity);
+      
+      // Get the new student record
+      const [newStudent] = await datastore.get(studentKey);
+      studentId = studentKey.id;
+      console.log(`Created student record with ID: ${studentId}`);
+      
+      // Check if there are any notebook assignments for this student email
+      const assignmentQuery = datastore
+        .createQuery(NOTEBOOK_STUDENT_KIND)
+        .filter('studentEmail', '=', payload.email);
+      
+      const [assignments] = await datastore.runQuery(assignmentQuery);
+      
+      // If no assignments, automatically assign the student to a notebook
+      // so they can use the extension without requiring a teacher to assign them
+      if (assignments.length === 0 && process.env.DEFAULT_NOTEBOOK_ID) {
+        console.log(`No assignments found for ${payload.email}, adding default notebook assignment`);
+        const defaultNotebookId = process.env.DEFAULT_NOTEBOOK_ID;
+        
+        const assignmentKey = datastore.key(NOTEBOOK_STUDENT_KIND);
+        const assignmentEntity = {
+          key: assignmentKey,
+          data: {
+            notebookId: defaultNotebookId,
+            studentEmail: payload.email,
+            assignedBy: "system",
+            assignedAt: new Date().toISOString()
+          }
+        };
+        
+        await datastore.save(assignmentEntity);
+        console.log(`Assigned student to default notebook: ${defaultNotebookId}`);
+      }
+    } else {
+      studentId = students[0][datastore.KEY].id;
+    }
+
+    req.student = {
+      email: payload.email,
+      id: studentId,
+      name: payload.name
+    };
+
+    next();
+  } catch (error) {
+    console.error('Student authentication error:', error);
+    res.status(401).json({ error: 'Unauthorized: Invalid token' });
+  }
+}
+
+// Add this extra endpoint to help with debugging
+app.get('/api/auth-status', authenticate, async (req, res) => {
+  try {
+    const userEmail = req.user.email;
+    const userRole = await isTeacher(userEmail) ? 'teacher' : 'student';
+    
+    // Check if user also has a student record
+    const studentQuery = datastore
+      .createQuery(STUDENT_KIND)
+      .filter('email', '=', userEmail);
+    
+    const [students] = await datastore.runQuery(studentQuery);
+    const hasStudentRecord = students.length > 0;
+    
+    // Get assigned notebooks if applicable
+    const assignmentQuery = datastore
+      .createQuery(NOTEBOOK_STUDENT_KIND)
+      .filter('studentEmail', '=', userEmail);
+    
+    const [assignments] = await datastore.runQuery(assignmentQuery);
+    
+    res.json({
+      email: userEmail,
+      role: userRole,
+      hasStudentRecord: hasStudentRecord,
+      assignedNotebooks: assignments.length,
+      authStatus: 'valid'
+    });
+  } catch (error) {
+    res.status(500).json({ error: 'Error checking authentication status' });
+  }
+});
+
+// Also add this version for student authentication status
+app.get('/api/student/auth-status', authenticateStudent, async (req, res) => {
+  try {
+    const studentEmail = req.student.email;
+    
+    // Get assigned notebooks
+    const assignmentQuery = datastore
+      .createQuery(NOTEBOOK_STUDENT_KIND)
+      .filter('studentEmail', '=', studentEmail);
+    
+    const [assignments] = await datastore.runQuery(assignmentQuery);
+    
+    res.json({
+      email: studentEmail,
+      id: req.student.id,
+      assignedNotebooks: assignments.length,
+      authStatus: 'valid'
+    });
+  } catch (error) {
+    res.status(500).json({ error: 'Error checking student authentication status' });
   }
 });
 

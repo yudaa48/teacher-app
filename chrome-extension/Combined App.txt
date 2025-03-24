@@ -1,0 +1,7 @@
+Background.js
+
+chrome.runtime.onInstalled.addListener(() => {
+    console.log("Skeletal Helper extension installed.");
+});
+
+

@@ -1,0 +1,37 @@
+{
+  "manifest_version": 3,
+  "name": "NISU Extension",
+  "version": "1.2",
+  "description": "Interactive learning assistant for NotebookLM",
+  "permissions": [
+    "scripting",
+    "activeTab",
+    "storage",
+    "tabs"
+  ],
+  "host_permissions": [
+    "https://notebooklm.google.com/*",
+    "https://funkeai.uc.r.appspot.com/*",
+    "http://localhost:8080/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": ["https://notebooklm.google.com/*"],
+      "js": ["content.js"],
+      "run_at": "document_end"
+    }
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "NISU Extension"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["nisuext.png"],
+      "matches": ["https://notebooklm.google.com/*"]
+    }
+  ]
+}
