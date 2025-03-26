@@ -1,0 +1,777 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Funke AI - Student Console</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- Google Sign-In API -->
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <style>
+        /* ---------------------
+           GENERAL/BODY
+        ----------------------*/
+        body {
+            background: linear-gradient(135deg, #E9F3FF 0%, #FAFAFA 100%);
+            margin: 0;
+            padding: 0;
+            font-family: Arial, sans-serif;
+            color: #333;
+        }
+
+        /* ---------------------
+           HEADER
+        ----------------------*/
+        .header {
+            background: #ffffff;
+            color: #333;
+            padding: 10px 20px;
+            position: fixed;
+            top: 0;
+            width: 100%;
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid #ddd;
+        }
+        .header-left,
+        .header-center,
+        .header-right {
+            display: flex;
+            align-items: center;
+        }
+        .header-center {
+            flex: 1;
+            justify-content: center;
+        }
+        .header img {
+            height: 52px;
+            margin-right: 10px;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 1.5rem;
+        }
+
+        /* ---------------------
+           SPACER
+        ----------------------*/
+        .spacer {
+            height: 60px;
+        }
+
+        /* ---------------------
+           LOGIN CONTAINER
+        ----------------------*/
+        #loginContainer {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+        /* Responsive styling for the login image */
+        #loginContainer img {
+            width: 180px;
+            height: 154px;
+            max-width: 50%;
+            margin-bottom: 20px;
+        }
+        /* Center the Google Sign-In button */
+        .g_id_signin {
+            margin: 0 auto;
+        }
+        #appContent {
+            display: none;
+        }
+
+        /* ---------------------
+           USER PROFILE
+        ----------------------*/
+        .user-profile {
+            display: flex;
+            align-items: center;
+            margin-right: 15px;
+        }
+        .user-profile img {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+
+        /* ---------------------
+           NOTEBOOK CARDS
+        ----------------------*/
+        .notebook-card {
+            background: #ffffff;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            cursor: pointer;
+            height: 100%;
+        }
+        .notebook-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 6px 12px rgba(0,0,0,0.15);
+        }
+        .notebook-card .card-body {
+            display: flex;
+            flex-direction: column;
+        }
+        .notebook-card .card-title {
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        .notebook-card .progress {
+            margin-top: auto;
+            height: 8px;
+            background-color: #E9E9E9;
+        }
+        .notebook-card .progress-bar {
+            background-color: #D2BBFF;
+        }
+        .notebook-status {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            font-size: 12px;
+            color: #666;
+        }
+
+        /* ---------------------
+           BUTTONS
+        ----------------------*/
+        .btn-primary {
+            background-color: #D2BBFF !important;
+            border-color: #D2BBFF !important;
+            color: #333 !important;
+        }
+        .btn-primary:hover,
+        .btn-primary:focus,
+        .btn-primary:active {
+            background-color: #C4A6FF !important;
+            border-color: #C4A6FF !important;
+            color: #333 !important;
+        }
+
+        /* ---------------------
+           ACCORDION FOR PLAYLIST
+        ----------------------*/
+        .accordion {
+            --bs-accordion-bg: white;
+            --bs-accordion-border-color: #D2BBFF;
+            --bs-accordion-btn-focus-box-shadow: none;
+            --bs-accordion-active-bg: #F7F3FF;
+            --bs-accordion-active-color: #333;
+            margin-bottom: 20px;
+        }
+        .accordion-button:not(.collapsed) {
+            background-color: #F7F3FF;
+            color: #333;
+        }
+        .accordion-button:focus {
+            box-shadow: none;
+        }
+        .playlist-item {
+            border-left: 3px solid #D2BBFF;
+            padding: 10px 15px;
+            margin-bottom: 10px;
+            background-color: #FAFAFA;
+            border-radius: 0 5px 5px 0;
+            transition: background-color 0.2s ease;
+        }
+        .playlist-item:hover {
+            background-color: #F7F3FF;
+        }
+        .playlist-item.completed {
+            border-left-color: #8BC34A;
+            background-color: #F1F8E9;
+        }
+        .item-type-badge {
+            display: inline-block;
+            padding: 2px 6px;
+            border-radius: 12px;
+            font-size: 10px;
+            font-weight: bold;
+            background-color: #D2BBFF;
+            color: #333;
+            margin-right: 8px;
+        }
+        .badge-prompt { background-color: #D2BBFF; }
+        .badge-multimedia { background-color: #FFCDD2; }
+        .badge-quiz { background-color: #C8E6C9; }
+        .badge-assignment { background-color: #BBDEFB; }
+        .badge-website { background-color: #FFECB3; }
+    </style>
+</head>
+<body>
+<div class="header">
+    <div class="header-left">
+        <img src="funkeai.png" alt="Funke AI Logo">
+    </div>
+    <div class="header-center">
+        <h1>Funke AI Student Learning</h1>
+    </div>
+    <div class="header-right">
+        <div id="userProfile" class="user-profile" style="display: none;">
+            <img id="userAvatar" src="" alt="User">
+            <span id="userName"></span>
+        </div>
+        <button id="logoutButton" class="btn btn-outline-dark" style="display: none;" onclick="handleSignOut()">Sign Out</button>
+        
+        <!-- Only visible when in a notebook view -->
+        <button id="backButton" class="btn btn-primary ms-2" style="display: none;" onclick="showNotebookList()">
+            Back to Notebooks
+        </button>
+    </div>
+</div>
+
+<!-- Spacer to push content below the fixed header -->
+<div class="spacer"></div>
+
+<!-- Updated Login Container -->
+<div id="loginContainer">
+    <img src="funkeai.png" alt="FunkeAI Logo">
+    <h2 class="mb-4">Let's get Funke! Please log in</h2>
+    <p class="mb-4">Sign in with your Google account to see your learning materials</p>
+    <div id="g_id_onload"
+         data-client_id="294376282666-lllnj1ro4d5qu3iq21nmmasr16tjije5.apps.googleusercontent.com"
+         data-callback="handleCredentialResponse">
+    </div>
+    <div class="g_id_signin"
+         data-type="standard"
+         data-size="large"
+         data-theme="outline"
+         data-text="sign_in_with"
+         data-shape="rectangular"
+         data-logo_alignment="left">
+    </div>
+</div>
+
+<!-- App content - hidden until authenticated -->
+<div id="appContent" class="container mt-4 mb-4">
+    <!-- Notebook list view -->
+    <div id="notebooksView">
+        <h2 class="mb-4">Your Learning Materials</h2>
+        <div id="loadingSpinner" class="text-center my-5">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <p class="mt-3">Loading your notebooks...</p>
+        </div>
+        <div id="noNotebooksMessage" class="alert alert-info text-center" style="display: none;">
+            You don't have any notebooks assigned to you yet. Please contact your instructor.
+        </div>
+        <div id="notebooksList" class="row row-cols-1 row-cols-md-3 g-4"></div>
+    </div>
+
+    <!-- Single notebook view (hidden initially) -->
+    <div id="notebookView" style="display: none;">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2 id="currentNotebookTitle">Notebook Title</h2>
+            <div>
+                <span id="progressCounter" class="badge bg-primary">0/0 items completed</span>
+            </div>
+        </div>
+
+        <div class="progress mb-4" style="height: 10px;">
+            <div id="notebookProgressBar" class="progress-bar" role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+        </div>
+
+        <div class="alert alert-info">
+            Click on an item below to use it in NotebookLM with the NISU extension.
+        </div>
+        
+        <div id="playlistContainer"></div>
+        
+        <!-- Instructions for NISU extension -->
+        <div class="card mt-4">
+            <div class="card-body">
+                <h5 class="card-title">How to use with NotebookLM</h5>
+                <p>To interact with these learning materials in NotebookLM:</p>
+                <ol>
+                    <li>Open NotebookLM in your browser</li>
+                    <li>Make sure the NISU extension is installed</li>
+                    <li>Click on a learning item from the list above</li>
+                    <li>The extension will automatically load the content for you</li>
+                </ol>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Google Auth variables
+    let userToken = '';
+    let userData = null;
+
+    // App state variables
+    let notebooks = [];
+    let currentNotebook = null;
+    let currentPlaylist = [];
+
+    // API endpoints
+    // const API_BASE_URL = 'https://funkeai.uc.r.appspot.com/api';
+    const API_BASE_URL = 'http://localhost:8080/api';
+
+    // Check for authentication on page load
+    document.addEventListener('DOMContentLoaded', function() {
+        const storedAuthData = localStorage.getItem('authData');
+        if (storedAuthData) {
+            try {
+                const authData = JSON.parse(storedAuthData);
+                if (authData.token && authData.expiry > Date.now()) {
+                    userToken = authData.token;
+                    userData = authData.user;
+                    document.getElementById('userAvatar').src = userData.picture;
+                    document.getElementById('userName').textContent = userData.name;
+                    document.getElementById('userProfile').style.display = 'flex';
+                    document.getElementById('logoutButton').style.display = 'block';
+                    document.getElementById('loginContainer').style.display = 'none';
+                    document.getElementById('appContent').style.display = 'block';
+                    fetchNotebooks();
+                    return;
+                }
+            } catch (error) {
+                console.error('Error parsing stored auth data:', error);
+            }
+            localStorage.removeItem('authData');
+        }
+        document.getElementById('loginContainer').style.display = 'block';
+        document.getElementById('appContent').style.display = 'none';
+    });
+
+    // Parse JWT token
+    function parseJwt(token) {
+        const base64Url = token.split('.')[1];
+        const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+        const jsonPayload = decodeURIComponent(
+            atob(base64)
+                .split('')
+                .map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+                .join('')
+        );
+        return JSON.parse(jsonPayload);
+    }
+
+    // Handle Google sign-in
+    async function handleCredentialResponse(response) {
+        userToken = response.credential;
+        const decodedToken = parseJwt(userToken);
+        userData = {
+            name: decodedToken.name,
+            email: decodedToken.email,
+            picture: decodedToken.picture
+        };
+        
+        const expiry = decodedToken.exp * 1000;
+        localStorage.setItem('authData', JSON.stringify({
+            token: userToken,
+            user: userData,
+            expiry: expiry
+        }));
+        
+        document.getElementById('userAvatar').src = userData.picture;
+        document.getElementById('userName').textContent = userData.name;
+        document.getElementById('userProfile').style.display = 'flex';
+        document.getElementById('logoutButton').style.display = 'block';
+        document.getElementById('loginContainer').style.display = 'none';
+        document.getElementById('appContent').style.display = 'block';
+        
+        fetchNotebooks();
+    }
+
+    // Handle sign out
+    function handleSignOut() {
+        google.accounts.id.disableAutoSelect();
+        userData = null;
+        userToken = '';
+        localStorage.removeItem('authData');
+        document.getElementById('userProfile').style.display = 'none';
+        document.getElementById('logoutButton').style.display = 'none';
+        document.getElementById('appContent').style.display = 'none';
+        document.getElementById('loginContainer').style.display = 'block';
+    }
+
+    // Fetch notebooks assigned to the student
+    async function fetchNotebooks() {
+        try {
+            document.getElementById('loadingSpinner').style.display = 'block';
+            document.getElementById('noNotebooksMessage').style.display = 'none';
+            document.getElementById('notebooksList').innerHTML = '';
+            
+            const response = await fetch(`${API_BASE_URL}/students/notebooks`, {
+                headers: { 'Authorization': `Bearer ${userToken}` }
+            });
+            
+            if (!response.ok) {
+                throw new Error('Failed to fetch notebooks');
+            }
+            
+            const data = await response.json();
+            notebooks = data.notebooks || [];
+            
+            if (notebooks.length === 0) {
+                document.getElementById('noNotebooksMessage').style.display = 'block';
+            } else {
+                displayNotebooks(notebooks);
+            }
+            
+            document.getElementById('loadingSpinner').style.display = 'none';
+        } catch (error) {
+            console.error('Error fetching notebooks:', error);
+            document.getElementById('loadingSpinner').style.display = 'none';
+            document.getElementById('notebooksList').innerHTML = `
+                <div class="col-12">
+                    <div class="alert alert-danger">
+                        Error loading notebooks: ${error.message}
+                    </div>
+                </div>
+            `;
+        }
+    }
+
+    // Display notebooks as cards
+    function displayNotebooks(notebooks) {
+        const container = document.getElementById('notebooksList');
+        container.innerHTML = '';
+        
+        notebooks.forEach(notebook => {
+            // Create progress data (this would come from the API in a real implementation)
+            // Here we're just generating random progress for demo purposes
+            const progress = {
+                completed: Math.floor(Math.random() * 10),
+                total: 10,
+                lastAccessed: new Date().toLocaleDateString()
+            };
+            
+            const progressPercentage = progress.total > 0 
+                ? Math.round((progress.completed / progress.total) * 100) 
+                : 0;
+            
+            const notebookCard = document.createElement('div');
+            notebookCard.className = 'col';
+            notebookCard.innerHTML = `
+                <div class="notebook-card" data-notebook-id="${notebook.id}">
+                    <div class="card-body">
+                        <h5 class="card-title">📗 ${notebook.name}</h5>
+                        <p class="card-text text-muted">Created by: ${notebook.createdBy}</p>
+                        
+                        <div class="notebook-status">
+                            <span>${progress.completed} of ${progress.total} items completed</span>
+                            <span>Last accessed: ${progress.lastAccessed}</span>
+                        </div>
+                        
+                        <div class="progress">
+                            <div class="progress-bar" role="progressbar" style="width: ${progressPercentage}%" 
+                                 aria-valuenow="${progressPercentage}" aria-valuemin="0" aria-valuemax="100"></div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            notebookCard.querySelector('.notebook-card').addEventListener('click', () => {
+                openNotebook(notebook);
+            });
+            
+            container.appendChild(notebookCard);
+        });
+    }
+
+    // Open a specific notebook and show its playlist
+    async function openNotebook(notebook) {
+        try {
+            currentNotebook = notebook;
+            
+            // Show loading state
+            document.getElementById('notebookView').style.display = 'block';
+            document.getElementById('notebooksView').style.display = 'none';
+            document.getElementById('backButton').style.display = 'block';
+            document.getElementById('currentNotebookTitle').textContent = notebook.name;
+            document.getElementById('playlistContainer').innerHTML = `
+                <div class="text-center my-5">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading playlist...</span>
+                    </div>
+                    <p class="mt-3">Loading learning materials...</p>
+                </div>
+            `;
+            
+            // Fetch the notebook playlist
+            const response = await fetch(`${API_BASE_URL}/students/notebooks/${notebook.id}/playlist`, {
+                headers: { 'Authorization': `Bearer ${userToken}` }
+            });
+            
+            if (!response.ok) {
+                throw new Error('Failed to fetch playlist');
+            }
+            
+            const data = await response.json();
+            currentPlaylist = data.playlist || [];
+            
+            displayPlaylist(currentPlaylist);
+            updateProgressCounter(currentPlaylist); } catch (error) {
+            console.error('Error opening notebook:', error);
+            document.getElementById('playlistContainer').innerHTML = `
+                <div class="alert alert-danger">
+                    Error loading notebook content: ${error.message}
+                </div>
+            `;
+        }
+    }
+
+    // Display the playlist items
+    function displayPlaylist(playlist) {
+        const container = document.getElementById('playlistContainer');
+        container.innerHTML = '';
+        
+        if (!playlist || playlist.length === 0) {
+            container.innerHTML = `
+                <div class="alert alert-info">
+                    This notebook doesn't have any learning materials yet.
+                </div>
+            `;
+            return;
+        }
+        
+        // Group items by type for better organization
+        const groupedItems = groupPlaylistByType(playlist);
+        
+        // Create accordion for each type
+        Object.keys(groupedItems).forEach((type, index) => {
+            const typeItems = groupedItems[type];
+            
+            const accordionItem = document.createElement('div');
+            accordionItem.className = 'accordion-item';
+            accordionItem.innerHTML = `
+                <h2 class="accordion-header" id="heading${index}">
+                    <button class="accordion-button ${index > 0 ? 'collapsed' : ''}" type="button" 
+                            data-bs-toggle="collapse" data-bs-target="#collapse${index}"
+                            aria-expanded="${index === 0}" aria-controls="collapse${index}">
+                        ${getTypeIcon(type)} ${type} (${typeItems.length} items)
+                    </button>
+                </h2>
+                <div id="collapse${index}" class="accordion-collapse collapse ${index === 0 ? 'show' : ''}"
+                     aria-labelledby="heading${index}">
+                    <div class="accordion-body" id="typeBody${index}">
+                    </div>
+                </div>
+            `;
+            
+            const accordion = document.createElement('div');
+            accordion.className = 'accordion';
+            accordion.appendChild(accordionItem);
+            container.appendChild(accordion);
+            
+            // Add items to this type's body
+            const typeBody = document.getElementById(`typeBody${index}`);
+            typeItems.forEach(item => {
+                const itemElement = document.createElement('div');
+                itemElement.className = `playlist-item ${item.status === 'complete' ? 'completed' : ''}`;
+                itemElement.setAttribute('data-item-id', item.id);
+                
+                itemElement.innerHTML = `
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <span class="item-type-badge badge-${type.toLowerCase()}">${getTypeShortName(type)}</span>
+                            ${item.command.length > 60 ? item.command.substring(0, 60) + '...' : item.command}
+                        </div>
+                        <div>
+                            ${item.status === 'complete' 
+                                ? '<span class="badge bg-success">Completed</span>' 
+                                : '<button class="btn btn-sm btn-primary">Use</button>'}
+                        </div>
+                    </div>
+                `;
+                
+                // Add click handler to the "Use" button or the entire item if completed
+                if (item.status === 'complete') {
+                    itemElement.addEventListener('click', () => handleItemClick(item));
+                } else {
+                    const useBtn = itemElement.querySelector('.btn');
+                    useBtn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        handleItemClick(item);
+                    });
+                }
+                
+                typeBody.appendChild(itemElement);
+            });
+        });
+    }
+
+    // Group playlist items by their type
+    function groupPlaylistByType(playlist) {
+        const groups = {};
+        
+        playlist.forEach(item => {
+            const type = item.type || 'Other';
+            if (!groups[type]) {
+                groups[type] = [];
+            }
+            groups[type].push(item);
+        });
+        
+        return groups;
+    }
+
+    // Get icon for playlist item type
+    function getTypeIcon(type) {
+        const typeIcons = {
+            'Prompt': '💬',
+            'Multimedia': '🎬',
+            'Quiz': '❓',
+            'Assignment': '📝',
+            'Website': '🌐',
+            'Other': '📄'
+        };
+        
+        return typeIcons[type] || typeIcons['Other'];
+    }
+
+    // Get short name for type badge
+    function getTypeShortName(type) {
+        const shortNames = {
+            'Prompt': 'Prompt',
+            'Multimedia': 'Media',
+            'Quiz': 'Quiz',
+            'Assignment': 'Task',
+            'Website': 'Web',
+            'Other': 'Item'
+        };
+        
+        return shortNames[type] || shortNames['Other'];
+    }
+
+    // Handle item click - will integrate with NISU extension
+    function handleItemClick(item) {
+        // Send message to NISU extension to execute this item
+        console.log('Using item:', item);
+        
+        // Integration with Chrome extension
+        if (chrome.runtime && chrome.runtime.sendMessage) {
+            chrome.runtime.sendMessage({ 
+                action: 'executePlaylistItem',
+                notebook: currentNotebook.name,
+                item: item
+            });
+            
+            // Mark as complete
+            markItemComplete(item.id);
+        } else {
+            alert(`To use this item in NotebookLM, please install the NISU extension and open NotebookLM.
+Item: ${item.command}`);
+        }
+    }
+
+    // Mark an item as completed
+    async function markItemComplete(itemId) {
+        try {
+            if (!currentNotebook || !itemId) return;
+            
+            const response = await fetch(`${API_BASE_URL}/students/progress`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${userToken}`
+                },
+                body: JSON.stringify({
+                    notebookId: currentNotebook.id,
+                    itemId: itemId,
+                    completed: true
+                })
+            });
+            
+            if (!response.ok) {
+                throw new Error('Failed to update progress');
+            }
+            
+            // Update the item in the current playlist
+            for (let i = 0; i < currentPlaylist.length; i++) {
+                if (currentPlaylist[i].id === itemId) {
+                    currentPlaylist[i].status = 'complete';
+                    break;
+                }
+            }
+            
+            // Refresh the playlist display
+            displayPlaylist(currentPlaylist);
+            updateProgressCounter(currentPlaylist);
+            
+        } catch (error) {
+            console.error('Error marking item complete:', error);
+        }
+    }
+
+    // Update the progress counter and progress bar
+    function updateProgressCounter(playlist) {
+        if (!playlist || playlist.length === 0) {
+            document.getElementById('progressCounter').textContent = 'No items';
+            document.getElementById('notebookProgressBar').style.width = '0%';
+            return;
+        }
+        
+        const total = playlist.length;
+        const completed = playlist.filter(item => item.status === 'complete').length;
+        const percentage = Math.round((completed / total) * 100);
+        
+        document.getElementById('progressCounter').textContent = `${completed}/${total} items completed`;
+        document.getElementById('notebookProgressBar').style.width = `${percentage}%`;
+        document.getElementById('notebookProgressBar').setAttribute('aria-valuenow', percentage);
+    }
+
+    // Show the notebook list view
+    function showNotebookList() {
+        document.getElementById('notebookView').style.display = 'none';
+        document.getElementById('notebooksView').style.display = 'block';
+        document.getElementById('backButton').style.display = 'none';
+        currentNotebook = null;
+        currentPlaylist = [];
+        
+        // Refresh the notebook list to get updated progress
+        fetchNotebooks();
+    }
+
+    // Function to sync with NISU extension
+    function syncWithExtension() {
+        // Check if extension is installed
+        if (chrome.runtime && chrome.runtime.sendMessage) {
+            // Create a listener for messages from the extension
+            chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+                if (message.action === 'notebookCompleted') {
+                    // An item was completed in the notebook
+                    if (currentNotebook && currentNotebook.id === message.notebookId) {
+                        markItemComplete(message.itemId);
+                    }
+                    sendResponse({ success: true });
+                }
+            });
+        }
+    }
+
+    // Initialize when window loads
+    window.onload = function() {
+        // Initialize Google Sign-In
+        google.accounts.id.initialize({
+            client_id: "294376282666-lllnj1ro4d5qu3iq21nmmasr16tjije5.apps.googleusercontent.com",
+            callback: handleCredentialResponse
+        });
+        
+        google.accounts.id.renderButton(
+            document.getElementById("g_id_signin"),
+            { theme: "outline", size: "large" }
+        );
+        
+        // Try to sync with extension if it exists
+        syncWithExtension();
+    };
+</script>
+</body>
+</html>

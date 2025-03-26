@@ -383,8 +383,53 @@
     </div>
 </div>
 
+<!-- Add this to the existing user registration modal or create a new modal -->
+<div class="modal fade" id="studentRegistrationModal" tabindex="-1" aria-labelledby="studentRegistrationModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="studentRegistrationModalLabel">Add Students to Notebook</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label for="notebookSelect" class="form-label">Select Notebook</label>
+                    <select id="notebookSelect" class="form-select">
+                        <!-- Notebooks will be populated dynamically -->
+                    </select>
+                </div>
+                
+                <div class="mb-3">
+                    <label class="form-label">Add Students</label>
+                    <div class="input-group">
+                        <input type="email" id="studentEmail" class="form-control" placeholder="Enter student email">
+                        <button class="btn btn-primary" onclick="addIndividualStudent()">Add Student</button>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label for="studentCsv" class="form-label">Or Upload CSV</label>
+                    <input type="file" id="studentCsv" class="form-control" accept=".csv">
+                </div>
+
+                <div id="studentImportResults" class="mt-3">
+                    <!-- Results will be displayed here -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary" onclick="uploadStudentCsv()">Import Students</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Hidden manage users button (shown conditionally) -->
 <button id="manageUsersBtn" class="btn btn-outline-light ms-2" style="display: none;">Manage Users</button>
+<!-- Add this button to your header or sidebar -->
+<button id="manageUsersBtn" class="btn btn-outline-light ms-2" data-bs-toggle="modal" data-bs-target="#studentRegistrationModal">
+    Add Students
+</button>
 
 <script>
     // Google Auth variables
@@ -874,6 +919,135 @@
             alert('Error exporting notebook: ' + error.message);
         }
     }
+
+    async function addIndividualStudent() {
+    const notebookSelect = document.getElementById('notebookSelect');
+    const studentEmailInput = document.getElementById('studentEmail');
+    const resultsContainer = document.getElementById('studentImportResults');
+
+    const notebookId = notebookSelect.value;
+    const studentEmail = studentEmailInput.value.trim();
+
+    if (!notebookId || !studentEmail) {
+        resultsContainer.innerHTML = '<div class="alert alert-danger">Please select a notebook and enter a student email.</div>';
+        return;
+    }
+
+    try {
+        const response = await fetch(`${API_BASE_URL}/notebooks/${notebookId}/students`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${userToken}`
+            },
+            body: JSON.stringify({ students: [studentEmail] })
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            resultsContainer.innerHTML = `
+                <div class="alert alert-success">
+                    Student ${studentEmail} added successfully to notebook.
+                </div>
+            `;
+            studentEmailInput.value = ''; // Clear input
+        } else {
+            resultsContainer.innerHTML = `
+                <div class="alert alert-danger">
+                    Failed to add student: ${result.message}
+                </div>
+            `;
+        }
+    } catch (error) {
+        resultsContainer.innerHTML = `
+            <div class="alert alert-danger">
+                Error adding student: ${error.message}
+            </div>
+        `;
+    }
+}
+
+async function uploadStudentCsv() {
+    const notebookSelect = document.getElementById('notebookSelect');
+    const csvFileInput = document.getElementById('studentCsv');
+    const resultsContainer = document.getElementById('studentImportResults');
+
+    const notebookId = notebookSelect.value;
+    const csvFile = csvFileInput.files[0];
+
+    if (!notebookId || !csvFile) {
+        resultsContainer.innerHTML = '<div class="alert alert-danger">Please select a notebook and a CSV file.</div>';
+        return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+        const csvData = e.target.result;
+
+        try {
+            const response = await fetch(`${API_BASE_URL}/students/import`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${userToken}`
+                },
+                body: JSON.stringify({ 
+                    notebookId: notebookId, 
+                    csvData: csvData 
+                })
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                resultsContainer.innerHTML = `
+                    <div class="alert alert-success">
+                        ${result.message}
+                        <br>Valid Students: ${result.validStudents.join(', ')}
+                        <br>Already Assigned: ${result.alreadyAssignedStudents.join(', ')}
+                    </div>
+                `;
+                csvFileInput.value = ''; // Clear file input
+            } else {
+                resultsContainer.innerHTML = `
+                    <div class="alert alert-danger">
+                        Failed to import students: ${result.message}
+                    </div>
+                `;
+            }
+        } catch (error) {
+            resultsContainer.innerHTML = `
+                <div class="alert alert-danger">
+                    Error importing students: ${error.message}
+                </div>
+            `;
+        }
+    };
+
+    reader.readAsText(csvFile);
+}
+
+// Populate notebook dropdown when modal opens
+function populateNotebookDropdown() {
+    const notebookSelect = document.getElementById('notebookSelect');
+    notebookSelect.innerHTML = '<option value="">Select a Notebook</option>';
+    
+    notebooks.forEach(notebook => {
+        const option = document.createElement('option');
+        option.value = notebook.id || notebook.name;
+        option.textContent = notebook.name;
+        notebookSelect.appendChild(option);
+    });
+}
+
+// Add this to your existing event listeners
+document.addEventListener('DOMContentLoaded', function() {
+    const addStudentsBtn = document.getElementById('addStudentsBtn');
+    if (addStudentsBtn) {
+        addStudentsBtn.addEventListener('click', populateNotebookDropdown);
+    }
+});
 
     window.onload = function() {
         google.accounts.id.initialize({
