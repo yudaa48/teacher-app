@@ -357,8 +357,11 @@
                     <input type="text" class="form-control" id="newNotebookName" placeholder="Enter a name for your notebook">
                 </div>
                 <div class="mb-3">
-                    <label for="idFromNotebookLM" class="form-label">ID From Notebook LM</label>
-                    <input type="text" class="form-control" id="idFromNotebookLM" placeholder="Enter a ID from Notebook LM">
+                    <label for="idFromNotebookLM" class="form-label">ID From Notebook LM</label>                    
+                    <input type="text" class="form-control" id="idFromNotebookLM" placeholder="Enter a ID for your ID Notebook LM">
+                    <span style="font-size: 12px;">
+                        <strong>Eg:</strong> https://notebooklm.google.com/notebook/8e29ec89-d5bb-4549-baad-249f117ab018, The ID is <strong>"8e29ec89-d5bb-4549-baad-249f117ab018"</strong>
+                    </span>
                 </div>
             </div>
             <div class="modal-footer">
@@ -451,7 +454,7 @@
 
     // API endpoints
     // const API_BASE_URL = 'https://funkeai.uc.r.appspot.com/api';
-    const API_BASE_URL = 'https://dev-dot-funkeai.uc.r.appspot.com/api';
+    const API_BASE_URL = 'https://ai-dot-funkeai.uc.r.appspot.com/api';
 
     // Fade animation helper for notebookContent
     function fadeNotebookContent(callback) {

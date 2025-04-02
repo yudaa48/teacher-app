@@ -1,6 +1,6 @@
 # app.yaml - Configuration for Google App Engine
 runtime: nodejs18
-service: dev
+service: ai
 
 env_variables:
   GOOGLE_CLIENT_ID: "294376282666-lllnj1ro4d5qu3iq21nmmasr16tjije5.apps.googleusercontent.com"
