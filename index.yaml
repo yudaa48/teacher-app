@@ -5,6 +5,7 @@ indexes:
   - name: createdBy
   - name: name
     direction: asc
+  - name: idFromNotebookLM #Update
 
 - kind: Progress
   properties:

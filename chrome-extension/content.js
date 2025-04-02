@@ -102,6 +102,82 @@
         }
 
         // Get the current notebook name from the URL
+        // function getCurrentNotebookName() {
+        //     const url = window.location.href;
+        //     console.log("Current URL:", url);
+            
+        //     try {
+        //         // Parse the URL
+        //         const parsedUrl = new URL(url);
+        //         console.log("Parsed URL:", parsedUrl);
+                
+        //         // If we're on the main page (empty path or just "/")
+        //         if (parsedUrl.pathname === "/" || parsedUrl.pathname === "") {
+        //             console.log("On NotebookLM main page - no specific notebook");
+        //             updateBubbleText("Please open a notebook first");
+        //             return null;
+        //         }
+                
+        //         const parts = parsedUrl.pathname.split('/');
+        //         console.log("URL path parts:", parts);
+                
+        //         // Pattern 1: /app/[notebookName]
+        //         if (parts.length >= 3 && parts[1] === 'app') {
+        //             return decodeURIComponent(parts[2]);
+        //         }
+                
+        //         // Pattern 2: /notebooks/[notebookId]/[notebookName]
+        //         if (parts.length >= 4 && parts[1] === 'notebooks') {
+        //             return decodeURIComponent(parts[3]);
+        //         }
+                
+        //         // Pattern 3: /notebook/[notebookId]
+        //         if (parts.length >= 3 && parts[1] === 'notebook') {
+        //             // Get notebook ID
+        //             const notebookId = parts[2];
+                    
+        //             // Try to find notebook name from chrome.storage mapping
+        //             return getNotebookNameFromId(notebookId, function(name) {
+        //                 if (name) {
+        //                     return name;
+        //                 }
+                        
+        //                 // For development: detect notebook by title
+        //                 const notebookTitle = document.title.replace(" - NotebookLM", "").trim();
+        //                 if (notebookTitle && notebookTitle !== "NotebookLM" && notebookTitle !== "Untitled notebook") {
+        //                     console.log("Found notebook name from title:", notebookTitle);
+        //                     return notebookTitle;
+        //                 }
+                        
+        //                 // Default notebook name for testing
+        //                 console.log("Using default notebook name for testing: 'Sample Biology Notebook'");
+        //                 return "Sample Biology Notebook";
+        //             });
+        //         }
+                
+        //         // For development: detect notebook by title
+        //         const notebookTitle = document.title.replace(" - NotebookLM", "").trim();
+        //         if (notebookTitle && notebookTitle !== "NotebookLM" && notebookTitle !== "Untitled notebook") {
+        //             console.log("Found notebook name from title:", notebookTitle);
+        //             return notebookTitle;
+        //         }
+                
+        //         // If all else fails, try to get Notebook name from URL search params (for NLM beta versions)
+        //         if (parsedUrl.searchParams.has("notebook")) {
+        //             const notebookFromParams = parsedUrl.searchParams.get("notebook");
+        //             console.log("Found notebook name from search params:", notebookFromParams);
+        //             return notebookFromParams;
+        //         }
+                
+        //         // Default notebook name for testing (allow testing on any page)
+        //         console.log("Using default notebook name for testing: 'Sample Biology Notebook'");
+        //         return "Sample Biology Notebook"; 
+        //     } catch (e) {
+        //         console.error("Error parsing URL:", e);
+        //         return "Sample Biology Notebook"; // Fallback for testing
+        //     }
+        // }
+
         function getCurrentNotebookName() {
             const url = window.location.href;
             console.log("Current URL:", url);
@@ -133,25 +209,43 @@
                 
                 // Pattern 3: /notebook/[notebookId]
                 if (parts.length >= 3 && parts[1] === 'notebook') {
-                    // Get notebook ID
+                    // Get notebook ID from URL
                     const notebookId = parts[2];
+                    console.log("Found notebook ID in URL:", notebookId);
                     
-                    // Try to find notebook name from chrome.storage mapping
-                    return getNotebookNameFromId(notebookId, function(name) {
-                        if (name) {
-                            return name;
-                        }
-                        
-                        // For development: detect notebook by title
-                        const notebookTitle = document.title.replace(" - NotebookLM", "").trim();
-                        if (notebookTitle && notebookTitle !== "NotebookLM" && notebookTitle !== "Untitled notebook") {
-                            console.log("Found notebook name from title:", notebookTitle);
-                            return notebookTitle;
-                        }
-                        
-                        // Default notebook name for testing
-                        console.log("Using default notebook name for testing: 'Sample Biology Notebook'");
-                        return "Sample Biology Notebook";
+                    // Return a promise to handle the async storage operation
+                    return new Promise((resolve) => {
+                        // Try to get notebook name from storage
+                        chrome.storage.local.get('lastOpenedNotebook', function(data) {
+                            if (chrome.runtime.lastError) {
+                                console.error("Error accessing storage:", chrome.runtime.lastError);
+                            }
+                            
+                            if (data && data.lastOpenedNotebook) {
+                                const storedNotebook = data.lastOpenedNotebook;
+                                console.log("Retrieved from storage:", storedNotebook);
+                                
+                                // Check if this is the same notebook (by ID or idFromNotebookLM)
+                                if (storedNotebook.id === notebookId || 
+                                    (storedNotebook.idFromNotebookLM && storedNotebook.idFromNotebookLM === notebookId)) {
+                                    console.log("Found matching notebook in storage with name:", storedNotebook.name);
+                                    resolve(storedNotebook.name);
+                                    return;
+                                }
+                            }
+                            
+                            // Fallback to title if storage lookup failed
+                            const notebookTitle = document.title.replace(" - NotebookLM", "").trim();
+                            if (notebookTitle && notebookTitle !== "NotebookLM" && notebookTitle !== "Untitled notebook") {
+                                console.log("Found notebook name from title:", notebookTitle);
+                                resolve(notebookTitle);
+                                return;
+                            }
+                            
+                            // Default notebook name as last resort
+                            console.log("Using default notebook name: 'Sample Biology Notebook'");
+                            resolve("Sample Biology Notebook");
+                        });
                     });
                 }
                 
@@ -171,7 +265,7 @@
                 
                 // Default notebook name for testing (allow testing on any page)
                 console.log("Using default notebook name for testing: 'Sample Biology Notebook'");
-                return "Sample Biology Notebook"; 
+                return "Sample Biology Notebook";
             } catch (e) {
                 console.error("Error parsing URL:", e);
                 return "Sample Biology Notebook"; // Fallback for testing
@@ -266,83 +360,105 @@
         // This is called every time the overlay or bubble is clicked.
         function refreshPlaylist(callback) {
             console.log("Refreshing playlist");
-            // Get the current notebook name
-            const notebookName = getCurrentNotebookName();
-            if (!notebookName) {
-                console.error("Could not determine notebook name from URL");
-                updateBubbleText("Please open a notebook first");
-                callback([], 0);
-                return;
-            }
             
-            // First check authentication
-            checkAuthentication(function(isAuthenticated, userData) {
-                if (!isAuthenticated) {
-                    updateBubbleText("Please sign in to use NISU");
+            // Get the current notebook name - handle both Promise and direct string return
+            const notebookNameResult = getCurrentNotebookName();
+            
+            // Helper function to continue with the notebook name
+            function continueWithNotebookName(notebookName) {
+                if (!notebookName) {
+                    // console.error("Could not determine notebook name from URL");
+                    updateBubbleText("Please open a notebook first");
                     callback([], 0);
                     return;
                 }
                 
-                console.log("Fetching instructions for notebook:", notebookName);
-                // Use the API to fetch the playlist for this notebook
-                chrome.runtime.sendMessage({ 
-                    action: "fetchInstructions",
-                    notebookName: notebookName
-                }, function (response) {
-                    console.log("Instructions fetch response:", response);
-                    if (response && response.success && response.data) {
-                        let newPlaylist = response.data.playlist || [];
-                        if (!newPlaylist || newPlaylist.length === 0) {
-                            console.warn("Empty playlist received from API");
+                // First check authentication
+                checkAuthentication(function(isAuthenticated, userData) {
+                    if (!isAuthenticated) {
+                        updateBubbleText("Please sign in to use NISU");
+                        callback([], 0);
+                        return;
+                    }
+                    
+                    console.log("Fetching instructions for notebook:", notebookName);
+                    // Use the API to fetch the playlist for this notebook
+                    chrome.runtime.sendMessage({ 
+                        action: "fetchInstructions",
+                        notebookName: notebookName
+                    }, function (response) {
+                        console.log("Instructions fetch response:", response);
+                        if (response && response.success && response.data) {
+                            let newPlaylist = response.data.playlist || [];
+                            if (!newPlaylist || newPlaylist.length === 0) {
+                                console.warn("Empty playlist received from API");
+                                // Fallback to default playlist for testing
+                                newPlaylist = [
+                                    { id: "default1", type: "Prompt", command: "What is the subject of this notebook?" },
+                                    { id: "default2", type: "Prompt", command: "Please summarize the key concepts." }
+                                ];
+                            }
+                            
+                            chrome.storage.local.get(["nisuPlaylist", "nisuCurrentIndex"], function (result) {
+                                let storedPlaylist = result.nisuPlaylist || [];
+                                let mergedPlaylist = mergePlaylist(newPlaylist, storedPlaylist);
+                                // Determine the first pending task index.
+                                let newIndex = mergedPlaylist.findIndex(item => item.status !== "complete");
+                                if (newIndex === -1) {
+                                    newIndex = mergedPlaylist.length;
+                                }
+                                
+                                // Create mapping of notebook name to ID
+                                chrome.storage.local.get(['notebookNameToIdMap'], function(mapResult) {
+                                    const nameToIdMap = mapResult.notebookNameToIdMap || {};
+                                    
+                                    // Store this mapping for future reference
+                                    if (response.data.notebookId && !nameToIdMap[notebookName]) {
+                                        nameToIdMap[notebookName] = response.data.notebookId;
+                                        chrome.storage.local.set({ notebookNameToIdMap: nameToIdMap });
+                                    }
+                                    
+                                    // Update the playlist in storage
+                                    chrome.storage.local.set({ 
+                                        nisuPlaylist: mergedPlaylist, 
+                                        nisuCurrentIndex: newIndex 
+                                    }, function () {
+                                        console.log("Playlist updated in storage, index:", newIndex);
+                                        callback(mergedPlaylist, newIndex);
+                                    });
+                                });
+                            });
+                        } else {
+                            console.error("Error fetching instructions:", response ? response.error : "No response");
+                            updateBubbleText("Error loading content. Please try again.");
                             // Fallback to default playlist for testing
-                            newPlaylist = [
+                            const defaultPlaylist = [
                                 { id: "default1", type: "Prompt", command: "What is the subject of this notebook?" },
                                 { id: "default2", type: "Prompt", command: "Please summarize the key concepts." }
                             ];
+                            processPlaylist(defaultPlaylist);
+                            callback(defaultPlaylist, 0);
                         }
-                        
-                        chrome.storage.local.get(["nisuPlaylist", "nisuCurrentIndex"], function (result) {
-                            let storedPlaylist = result.nisuPlaylist || [];
-                            let mergedPlaylist = mergePlaylist(newPlaylist, storedPlaylist);
-                            // Determine the first pending task index.
-                            let newIndex = mergedPlaylist.findIndex(item => item.status !== "complete");
-                            if (newIndex === -1) {
-                                newIndex = mergedPlaylist.length;
-                            }
-                            
-                            // Create mapping of notebook name to ID
-                            chrome.storage.local.get(['notebookNameToIdMap'], function(mapResult) {
-                                const nameToIdMap = mapResult.notebookNameToIdMap || {};
-                                
-                                // Store this mapping for future reference
-                                if (response.data.notebookId && !nameToIdMap[notebookName]) {
-                                    nameToIdMap[notebookName] = response.data.notebookId;
-                                    chrome.storage.local.set({ notebookNameToIdMap: nameToIdMap });
-                                }
-                                
-                                // Update the playlist in storage
-                                chrome.storage.local.set({ 
-                                    nisuPlaylist: mergedPlaylist, 
-                                    nisuCurrentIndex: newIndex 
-                                }, function () {
-                                    console.log("Playlist updated in storage, index:", newIndex);
-                                    callback(mergedPlaylist, newIndex);
-                                });
-                            });
-                        });
-                    } else {
-                        console.error("Error fetching instructions:", response ? response.error : "No response");
-                        updateBubbleText("Error loading content. Please try again.");
-                        // Fallback to default playlist for testing
-                        const defaultPlaylist = [
-                            { id: "default1", type: "Prompt", command: "What is the subject of this notebook?" },
-                            { id: "default2", type: "Prompt", command: "Please summarize the key concepts." }
-                        ];
-                        processPlaylist(defaultPlaylist);
-                        callback(defaultPlaylist, 0);
-                    }
+                    });
                 });
-            });
+            }
+            
+            // Check if notebookNameResult is a Promise
+            if (notebookNameResult && typeof notebookNameResult.then === 'function') {
+                // Handle Promise
+                notebookNameResult
+                    .then(notebookName => {
+                        continueWithNotebookName(notebookName);
+                    })
+                    .catch(error => {
+                        console.error("Error getting notebook name:", error);
+                        updateBubbleText("Error identifying notebook. Please try again.");
+                        callback([], 0);
+                    });
+            } else {
+                // Handle direct string return
+                continueWithNotebookName(notebookNameResult);
+            }
         }
 
         // Helper: Transform a media URL for embeddable players.
@@ -580,6 +696,27 @@
                         console.error("Text area not found for quiz.");
                         if (callback) callback();
                     }
+                } else if (type === "assignment") {
+                    console.log("Processing assignment:", item.command);
+                    let assignmentBox = document.querySelector(".assignment-box") || document.querySelector("textarea.assignment-input");
+        
+                    if (assignmentBox) {
+                        assignmentBox.value = item.command;
+                        assignmentBox.dispatchEvent(new Event("input", { bubbles: true }));
+        
+                        let submitButton = document.querySelector("button.assignment-submit");
+                        if (submitButton && !submitButton.disabled) {
+                            submitButton.click();
+                            console.log("Assignment submitted successfully.");
+                            setTimeout(callback, 500);
+                        } else {
+                            console.error("Assignment submit button not found or disabled.");
+                            if (callback) callback();
+                        }
+                    } else {
+                        console.error("Assignment input box not found.");
+                        if (callback) callback();
+                    } 
                 } else {
                     console.error("Unknown command type:", item.type);
                     if (callback) callback();
@@ -591,50 +728,58 @@
         }
 
         // Update progress in the database
-        function updateProgress(notebookName, itemId, completed, callback) {
-            console.log("Updating progress:", { notebook: notebookName, item: itemId, completed: completed });
-            if (!notebookName || !itemId) {
-                console.error("Missing notebook name or item ID for progress update");
-                if (callback) callback();
-                return;
-            }
-            
-            // Get notebook ID from storage if possible
-            chrome.storage.local.get(['notebookNameToIdMap'], function(result) {
-                const nameToIdMap = result.notebookNameToIdMap || {};
-                const notebookId = nameToIdMap[notebookName];
-                
-                // Send the progress update to the background script
-                chrome.runtime.sendMessage({ 
-                    action: "updateProgress",
-                    progress: {
-                        notebookId: notebookId,
-                        notebookName: notebookName, // Include name as fallback
-                        itemId: itemId,
-                        completed: completed
-                    }
-                }, function(response) {
-                    console.log("Progress update response:", response);
-                    if (response && response.success) {
-                        console.log("Progress updated successfully");
-                        
-                        // Also notify the student interface if it's open
-                        try {
-                            chrome.runtime.sendMessage({
-                                action: 'notebookCompleted',
-                                notebookId: notebookId || notebookName,
-                                itemId: itemId
-                            });
-                        } catch (e) {
-                            // Student interface might not be listening, ignore error
-                        }
-                    } else {
-                        console.error("Failed to update progress:", response ? response.error : "No response");
-                    }
+        async function updateProgress(notebookNamePromise, itemId, completed, callback) {
+            try {
+                const notebookName = await notebookNamePromise; 
+                console.log("Updating progress:", { notebook: notebookName, item: itemId, completed: completed });
+        
+                if (!notebookName || !itemId) {
+                    console.error("Missing notebook name or item ID for progress update");
                     if (callback) callback();
+                    return;
+                }
+        
+                // Get notebook ID from storage if possible
+                chrome.storage.local.get(['notebookNameToIdMap'], function(result) {
+                    const nameToIdMap = result.notebookNameToIdMap || {};
+                    const notebookId = nameToIdMap[notebookName];
+        
+                    // Send the progress update to the background script
+                    chrome.runtime.sendMessage({ 
+                        action: "updateProgress",
+                        progress: {
+                            notebookId: notebookId,
+                            notebookName: notebookName, // Include name as fallback
+                            itemId: itemId,
+                            completed: completed
+                        }
+                    }, function(response) {
+                        console.log("Progress update response:", response);
+                        if (response && response.success) {
+                            console.log("Progress updated successfully");
+        
+                            // Also notify the student interface if it's open
+                            try {
+                                chrome.runtime.sendMessage({
+                                    action: 'notebookCompleted',
+                                    notebookId: notebookId || notebookName,
+                                    itemId: itemId
+                                });
+                            } catch (e) {
+                                // Student interface might not be listening, ignore error
+                            }
+                        } else {
+                            console.error("Failed to update progress:", response ? response.error : "No response");
+                        }
+                        if (callback) callback();
+                    });
                 });
-            });
+            } catch (error) {
+                console.error("Error resolving notebook name:", error);
+                if (callback) callback();
+            }
         }
+        
 
         // Runs the next task in the playlist.
         function runNextItem() {
