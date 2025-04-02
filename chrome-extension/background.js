@@ -1,7 +1,7 @@
 // NADU Extension Background Script
 
 // Constants
-const API_BASE_URL = 'http://localhost:8080/api';
+const API_BASE_URL = 'https://dev-dot-funkeai.uc.r.appspot.com/api';
 let authToken = null;
 let userData = null;
 
@@ -82,7 +82,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         userData = null;
         
         // Clear auth data from Chrome storage
-        chrome.storage.local.remove(['authToken', 'userData'], function() {
+        chrome.storage.local.clear(function() {
             console.log("Auth data cleared from local storage");
             
             // Notify tabs that user has logged out

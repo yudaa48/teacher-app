@@ -2,7 +2,7 @@
 
 // Constants
 // const API_BASE_URL = 'https://funkeai.uc.r.appspot.com/api';
-const API_BASE_URL = 'http://localhost:8080/api';
+const API_BASE_URL = 'https://dev-dot-funkeai.uc.r.appspot.com/api';
 
 // Create a centralized authentication handler
 const AuthManager = {
@@ -56,12 +56,14 @@ const AuthManager = {
     }
 };
 
+
+
 // DOM Elements
 const loginView = document.getElementById('loginView');
 const userView = document.getElementById('userView');
 const loadingView = document.getElementById('loadingView');
 const signInButton = document.getElementById('signInButton');
-const signOutButton = document.getElementById('logoutButton');
+const signOutButton = document.getElementById('signOutButton');
 const activateButton = document.getElementById('activateButton');
 const userAvatar = document.getElementById('userAvatar');
 const userName = document.getElementById('userName');
@@ -210,11 +212,24 @@ function initiateGoogleSignIn() {
 
 // Sign out
 function signOut() {
-    console.log("Signing out");
-    chrome.runtime.sendMessage({ action: 'logout' }, function(response) {
-        console.log("Logout response:", response);
+    console.log("Signing out...");
+
+    // Kirim pesan ke background script untuk logout
+    chrome.runtime.sendMessage({ action: "logout" }, function(response) {
         if (response && response.success) {
-            showLoginView();
+            console.log("Logout successful");
+
+            // Hapus tampilan UI terkait login
+            loginStatus.textContent = "You have been logged out.";
+            loginLoader.style.display = "none";
+
+            // Redirect ke halaman login atau refresh
+            setTimeout(() => {
+                window.location.reload();
+            }, 1000);
+            showLoginView()
+        } else {
+            console.error("Logout failed:", response ? response.error : "No response");
         }
     });
 }
@@ -225,6 +240,7 @@ function fetchNotebooks() {
     chrome.runtime.sendMessage({ action: 'fetchNotebooks' }, function(response) {
         console.log("Fetch notebooks response:", response);
         if (response && response.success && response.data && response.data.notebooks) {
+            console.log("Notebooks data:", response.data.notebooks);
             displayNotebooks(response.data.notebooks);
         } else {
             statusMessage.textContent = 'No notebooks found or error fetching notebooks.';
@@ -238,45 +254,80 @@ function fetchNotebooks() {
 function displayNotebooks(notebooks) {
     console.log("Displaying notebooks:", notebooks);
     notebookList.innerHTML = '';
-    
+
     if (notebooks.length === 0) {
         statusMessage.textContent = 'No notebooks assigned to you.';
         return;
     }
-    
+
     notebooks.forEach(notebook => {
+        console.log("Notebook item:", notebook);
         const item = document.createElement('div');
         item.className = 'notebook-item';
         item.textContent = notebook.name;
+
+        // Tambahkan event click untuk redirect ke NotebookLM
         item.addEventListener('click', function() {
+            console.log("Notebook clicked:", notebook);
             openNotebook(notebook);
         });
+
         notebookList.appendChild(item);
     });
-    
+
     statusMessage.textContent = 'Click on a notebook to activate the NISU helper.';
 }
 
-// Open a notebook in NotebookLM
+
+//Open a notebook in NotebookLM by name
 function openNotebook(notebook) {
-    console.log("Opening notebook:", notebook);
-    // This is a placeholder - you'll need to adjust the URL format
-    const notebookURL = `https://notebooklm.google.com/app/${encodeURIComponent(notebook.name)}`;
+    console.log("Notebook clicked:", notebook);
     
-    // Check if we're already on a NotebookLM page
-    chrome.tabs.query({ active: true, currentWindow: true }, function(tabs) {
-        if (tabs[0].url.includes('notebooklm.google.com')) {
-            // We're already on NotebookLM, update the URL
-            chrome.tabs.update(tabs[0].id, { url: notebookURL });
+    if (!notebook || !notebook.id || !notebook.name) {
+        console.error("Invalid notebook data:", notebook);
+        return;
+    }
+
+    // Simpan ke storage dan log keduanya
+    const notebookData = {
+        name: notebook.name,
+        id: notebook.id,
+        idFromNotebookLM: notebook.idFromNotebookLM,
+        openTime: Date.now()
+    };
+
+    chrome.storage.local.set({ 'lastOpenedNotebook': notebookData }, function() {
+        console.log("Saved to storage:", notebookData);
+    });
+
+    console.log(`Opening Notebook: Name = ${notebook.name}, ID = ${notebook.id}, idFromNotebookLM = ${notebook.idFromNotebookLM}`);
+
+    // Pilih URL berdasarkan idFromNotebookLM jika tersedia
+    let notebookURL;
+    if (notebook.idFromNotebookLM) {
+        notebookURL = `https://notebooklm.google.com/notebook/${notebook.idFromNotebookLM}`;
+        console.log("Generated URL using idFromNotebookLM:", notebookURL);
+    } else {
+        // Jika tidak ada idFromNotebookLM, fallback ke id biasa
+        notebookURL = `https://notebooklm.google.com/notebook/${notebook.id}`;
+        console.log("Generated URL using notebook ID:", notebookURL);
+    }
+
+    // Buka di tab baru
+    chrome.tabs.create({ url: notebookURL }, function(newTab) {
+        if (chrome.runtime.lastError) {
+            console.error("Error creating new tab:", chrome.runtime.lastError);
         } else {
-            // Open a new tab with NotebookLM
-            chrome.tabs.create({ url: notebookURL });
+            console.log("Successfully opened notebook tab with ID:", newTab.id);
         }
-        
-        // Close the popup
-        window.close();
+
+        // Delay sebelum menutup popup
+        setTimeout(function() {
+            window.close();
+        }, 500);
     });
 }
+
 
 // Activate on current page
 function activateOnCurrentPage() {

@@ -319,7 +319,7 @@
 
     // API endpoints
     // const API_BASE_URL = 'https://funkeai.uc.r.appspot.com/api';
-    const API_BASE_URL = 'http://localhost:8080/api';
+    const API_BASE_URL = 'https://dev-dot-funkeai.uc.r.appspot.com';
 
     // Check for authentication on page load
     document.addEventListener('DOMContentLoaded', function() {
@@ -760,7 +760,7 @@ Item: ${item.command}`);
     window.onload = function() {
         // Initialize Google Sign-In
         google.accounts.id.initialize({
-            client_id: "294376282666-lllnj1ro4d5qu3iq21nmmasr16tjije5.apps.googleusercontent.com",
+            client_id: "",
             callback: handleCredentialResponse
         });
         

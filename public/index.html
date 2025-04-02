@@ -17,7 +17,7 @@
             background: linear-gradient(135deg, #E9F3FF 0%, #FAFAFA 100%);
             margin: 0;
             padding: 0;
-            font-family: Arial, sans-serif;
+            font-family: 'Google Sans', Arial, sans-serif;
             color: #333;
         }
 
@@ -253,7 +253,6 @@
             <span id="userName"></span>
         </div>
         <button id="logoutButton" class="btn btn-outline-dark" style="display: none;" onclick="handleSignOut()">Sign Out</button>
-        <button id="manageUsersBtn" class="btn btn-outline-dark ms-2" style="display: none;">Manage Users</button>
         <button id="saveButton" class="btn btn-success ms-2" onclick="saveChanges()" style="display: none;">Save Changes</button>
     </div>
     <div id="saveMessage" class="save-message">Saved!</div>
@@ -304,12 +303,18 @@
             <div id="notebookContent" style="opacity:1; transition: opacity 0.5s ease-in-out;">
                 <div class="d-flex justify-content-between align-items-center mb-4">
                     <h3 id="currentNotebookName">Select a Notebook</h3>
-                    <div>
+                    <div class="d-flex">
                         <button id="exportButton" class="btn btn-outline-primary" onclick="exportNotebook()" style="display: none;">
                             Export for Chrome Extension
                         </button>
+                        <button id="manageUsersBtnStudent" class="btn btn-outline-light ms-2" data-bs-toggle="modal" data-bs-target="#studentRegistrationModal">
+                            Add Students
+                        </button>
+                        <!-- Hidden manage users button (shown conditionally) -->
+                        <button id="manageUsersBtn" class="btn btn-outline-light ms-2">Manage Users</button>
                     </div>
                 </div>
+                
 
                 <!-- Add new item form (renamed to "Add") -->
                 <div id="addItemForm" class="mb-4" style="display: none;">
@@ -350,6 +355,10 @@
                 <div class="mb-3">
                     <label for="newNotebookName" class="form-label">Notebook Name</label>
                     <input type="text" class="form-control" id="newNotebookName" placeholder="Enter a name for your notebook">
+                </div>
+                <div class="mb-3">
+                    <label for="idFromNotebookLM" class="form-label">ID From Notebook LM</label>
+                    <input type="text" class="form-control" id="idFromNotebookLM" placeholder="Enter a ID from Notebook LM">
                 </div>
             </div>
             <div class="modal-footer">
@@ -401,11 +410,16 @@
                 
                 <div class="mb-3">
                     <label class="form-label">Add Students</label>
-                    <div class="input-group">
-                        <input type="email" id="studentEmail" class="form-control" placeholder="Enter student email">
-                        <button class="btn btn-primary" onclick="addIndividualStudent()">Add Student</button>
+                    <div class="d-flex">
+                        <div class="flex-grow-1">
+                            <input type="email" id="studentEmail" class="form-control mb-2" placeholder="Enter student email">
+                            <input type="text" id="studentName" class="form-control" placeholder="Enter student name">
+                        </div>
+                        <button id="addStudentBtn" class="btn btn-primary ms-2 align-self-end" onclick="addIndividualStudent()">Add Student</button>
                     </div>
                 </div>
+                
+                
 
                 <div class="mb-3">
                     <label for="studentCsv" class="form-label">Or Upload CSV</label>
@@ -424,12 +438,6 @@
     </div>
 </div>
 
-<!-- Hidden manage users button (shown conditionally) -->
-<button id="manageUsersBtn" class="btn btn-outline-light ms-2" style="display: none;">Manage Users</button>
-<!-- Add this button to your header or sidebar -->
-<button id="manageUsersBtn" class="btn btn-outline-light ms-2" data-bs-toggle="modal" data-bs-target="#studentRegistrationModal">
-    Add Students
-</button>
 
 <script>
     // Google Auth variables
@@ -443,7 +451,7 @@
 
     // API endpoints
     // const API_BASE_URL = 'https://funkeai.uc.r.appspot.com/api';
-    const API_BASE_URL = 'http://localhost:8080/api';
+    const API_BASE_URL = 'https://dev-dot-funkeai.uc.r.appspot.com/api';
 
     // Fade animation helper for notebookContent
     function fadeNotebookContent(callback) {
@@ -581,7 +589,7 @@
             messageElement.textContent = '';
             messageElement.className = 'alert';
         }
-        modal.show();
+        modal.show()
     }
 
     async function registerNewTeacher() {
@@ -642,7 +650,15 @@
                 throw new Error('Failed to fetch notebooks.');
             }
             const data = await response.json();
-            notebooks = data.notebooks || [];
+            notebooks = data.notebooks.map(notebook => ({
+            id: notebook.id, // Gunakan ID dari backend
+            name: notebook.name,
+            idFromNotebookLM: notebook.idFromNotebookLM,
+            createdBy: notebook.createdBy,
+            updatedAt: notebook.updatedAt
+            }));
+
+        console.log("Notebook yang di-load:", notebooks);
             displayNotebooks();
         } catch (error) {
             console.error(error);
@@ -653,37 +669,52 @@
     function displayNotebooks() {
         const notebookList = document.getElementById('notebookList');
         notebookList.innerHTML = '';
+        
         if (notebooks.length === 0) {
             notebookList.innerHTML = `
-          <div class="text-center p-3">
-              <p>No notebooks found.</p>
-              <p>Create your first notebook to get started!</p>
-          </div>
-        `;
+                <div class="text-center p-3">
+                    <p>No notebooks found.</p>
+                    <p>Create your first notebook to get started!</p>
+                </div>
+            `;
             return;
         }
+
         notebooks.forEach(notebook => {
             const notebookItem = document.createElement('div');
             notebookItem.className = 'notebook-item d-flex align-items-center';
+            
             const nameSpan = document.createElement('span');
             nameSpan.textContent = "📗 " + notebook.name;
             nameSpan.style.cursor = 'pointer';
-            nameSpan.onclick = () => selectNotebook(notebook);
+            
+            // Klik untuk memilih notebook, menggunakan ID notebook
+            nameSpan.onclick = () => {
+                console.log(`Notebook clicked: ${notebook.name}`); // Log klik notebook
+                selectNotebook(notebook);
+            };
+            
             const deleteBtn = document.createElement('button');
             deleteBtn.className = 'btn btn-sm btn-danger';
             deleteBtn.innerHTML = '&times;';
+            
             deleteBtn.onclick = (e) => {
                 e.stopPropagation();
                 deleteNotebook(notebook);
             };
+            
             notebookItem.appendChild(nameSpan);
             notebookItem.appendChild(deleteBtn);
-            if (currentNotebook && notebook.name === currentNotebook.name) {
+
+            if (currentNotebook && notebook.id === currentNotebook.id) { // Menggunakan ID untuk menandai yang aktif
                 notebookItem.classList.add('active');
             }
+
             notebookList.appendChild(notebookItem);
         });
     }
+
+
 
     async function deleteNotebook(notebook) {
         if (!confirm(`Are you sure you want to delete "${notebook.name}"?`)) {
@@ -715,12 +746,20 @@
 
     function selectNotebook(notebook) {
         fadeNotebookContent(() => {
+            if (!notebook || !notebook.id) {
+            console.error("Error: Selected notebook is invalid", notebook);
+            return;
+        }
             currentNotebook = notebook;
+            console.log(`Selected notebook: ${notebook.name} (ID: ${notebook.id})`);
+
             currentPlaylist = notebook.playlist || [];
             document.getElementById('currentNotebookName').textContent = notebook.name;
             document.getElementById('addItemForm').style.display = 'block';
             document.getElementById('exportButton').style.display = 'block';
             displayItems(currentPlaylist);
+            fetchAndDisplayPlaylist(notebook.id);
+
             const notebookItems = document.querySelectorAll('.notebook-item');
             notebookItems.forEach(item => {
                 item.classList.remove('active');
@@ -738,6 +777,8 @@
 
     async function createNewNotebook() {
         const notebookName = document.getElementById('newNotebookName').value.trim();
+        const idFromNotebookLM= document.getElementById('idFromNotebookLM').value.trim();
+
         if (!notebookName) {
             alert('Please enter a notebook name.');
             return;
@@ -749,7 +790,7 @@
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${userToken}`
                 },
-                body: JSON.stringify({ name: notebookName, playlist: [] })
+                body: JSON.stringify({ name: notebookName,  idFromNotebookLM: idFromNotebookLM ,playlist: [] })
             });
             if (!response.ok) {
                 throw new Error('Failed to create notebook.');
@@ -767,20 +808,21 @@
         }
     }
 
+    
+
     function generateUniqueId() {
         return 'id-' + Math.random().toString(36).substr(2, 9);
     }
-
     function displayItems(items) {
         const list = document.getElementById('commandList');
         list.innerHTML = '';
         if (!items || items.length === 0) {
             list.innerHTML = `
-          <div class="col-12">
-              <div class="alert alert-info">
-                  This notebook is empty. Add your first learning experience above!
-              </div>
-          </div>
+            <div class="col-12">
+                <div class="alert alert-info">
+                    This notebook is empty. Add your first learning experience above!
+                </div>
+            </div>
         `;
             return;
         }
@@ -789,19 +831,19 @@
             card.className = 'col-md-4 mb-3';
             card.setAttribute('data-index', index);
             card.innerHTML = `
-          <div class="card">
-              <div class="card-body">
-                  <select class="form-select mb-2" onchange="updateType(${index}, this.value)">
-                      <option value="Prompt" ${item.type === 'Prompt' ? 'selected' : ''}>💬 Prompt</option>
-                      <option value="Multimedia" ${item.type === 'Multimedia' ? 'selected' : ''}>🎬 Multimedia</option>
-                      <option value="Quiz" ${item.type === 'Quiz' ? 'selected' : ''}>❓ Quiz</option>
-                      <option value="Assignment" ${item.type === 'Assignment' ? 'selected' : ''}>📝 Assignment</option>
-                      <option value="Website" ${item.type === 'Website' ? 'selected' : ''}>🌐 Website</option>
-                  </select>
-                  <textarea class="form-control mb-2" rows="3" onchange="editItem(${index}, this.value)">${item.command}</textarea>
-                  <button class="btn btn-danger btn-sm" onclick="removeItem(${index})">Remove</button>
-              </div>
-          </div>`;
+            <div class="card">
+                <div class="card-body">
+                    <select class="form-select mb-2" onchange="updateType(${index}, this.value)">
+                        <option value="Prompt" ${item.type === 'Prompt' ? 'selected' : ''}>💬 Prompt</option>
+                        <option value="Multimedia" ${item.type === 'Multimedia' ? 'selected' : ''}>🎬 Multimedia</option>
+                        <option value="Quiz" ${item.type === 'Quiz' ? 'selected' : ''}>❓ Quiz</option>
+                        <option value="Assignment" ${item.type === 'Assignment' ? 'selected' : ''}>📝 Assignment</option>
+                        <option value="Website" ${item.type === 'Website' ? 'selected' : ''}>🌐 Website</option>
+                    </select>
+                    <textarea class="form-control mb-2" rows="3" onchange="editItem(${index}, this.value)">${item.command}</textarea>
+                    <button class="btn btn-danger btn-sm" onclick="removeItem(${index})">Remove</button>
+                </div>
+            </div>`;
             list.appendChild(card);
         });
         new Sortable(list, {
@@ -815,23 +857,84 @@
         });
     }
 
+    async function fetchAndDisplayPlaylist(notebookId) {
+        if (!notebookId) {
+            console.error("Error: notebookId is undefined or empty.");
+            return;
+        }
+
+        const list = document.getElementById('commandList');
+        list.innerHTML = '<div class="col-12"><div class="alert alert-info">Loading playlist...</div></div>';
+
+        try {
+            const response = await fetch(`${API_BASE_URL}/notebooks/teachers/${notebookId}/playlist`, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${userToken}`
+                }
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Failed to fetch playlist: ${response.status} - ${errorText}`);
+            }
+
+            const data = await response.json();
+            console.log('Playlist fetched:', data);
+
+            // ✅ Simpan playlist terbaru ke currentPlaylist
+            currentPlaylist = data.playlist || [];  
+            displayItems(currentPlaylist); // Tampilkan daftar item
+
+        } catch (error) {
+            console.error('Error fetching playlist:', error);
+            list.innerHTML = `
+                <div class="col-12">
+                    <div class="alert alert-danger">
+                        Failed to load playlist. ${error.message}
+                    </div>
+                </div>
+            `;
+        }
+    }
+
+
     function addItem() {
         if (!currentNotebook) {
             alert('Please select or create a notebook first.');
             return;
         }
-        const newCommand = document.getElementById('newCommand').value;
-        const contentType = document.getElementById('contentType').value;
-        if (!newCommand.trim()) return;
-        currentPlaylist.push({
+
+        const newCommandInput = document.getElementById('newCommand');  // Pastikan elemen diambil dengan benar
+        const contentTypeSelect = document.getElementById('contentType');
+
+        const newCommand = newCommandInput.value.trim();
+        const contentType = contentTypeSelect.value;
+
+        if (!newCommand) return;  
+
+        const newItem = {
             id: generateUniqueId(),
             command: newCommand,
             type: contentType || 'Prompt'
-        });
+        };
+
+        currentPlaylist.push(newItem);
         displayItems(currentPlaylist);
-        document.getElementById('newCommand').value = '';
-        showSaveButton();
+
+        newCommandInput.value = '';
+
+        // console.log("Item added:", newItem, "Updated Playlist:", currentPlaylist);
+
+        if (typeof showSaveButton === 'function') {
+            console.log("Calling showSaveButton()...");
+            showSaveButton();
+        } else {
+            console.error("showSaveButton() is not defined!");
+        }
     }
+
 
     function showSaveButton() {
         document.getElementById('saveButton').style.display = 'block';
@@ -867,6 +970,7 @@
                 },
                 body: JSON.stringify({
                     name: currentNotebook.name,
+                    idFromNotebookLM: currentNotebook.idFromNotebookLM,
                     playlist: currentPlaylist
                 })
             });
@@ -892,6 +996,7 @@
             alert('Error saving changes: ' + error.message);
         }
     }
+
 
     function exportNotebook() {
         if (!currentNotebook) {
@@ -923,15 +1028,25 @@
     async function addIndividualStudent() {
     const notebookSelect = document.getElementById('notebookSelect');
     const studentEmailInput = document.getElementById('studentEmail');
+    const studentNameInput = document.getElementById('studentName');
     const resultsContainer = document.getElementById('studentImportResults');
+    const addButton = document.getElementById('addStudentBtn'); // Ambil tombol spesifik
 
     const notebookId = notebookSelect.value;
     const studentEmail = studentEmailInput.value.trim();
+    const studentName = studentNameInput.value.trim();
+    console.log("Notebook ID:", notebookId);
+    console.log("Student Email:", studentEmail);
+    console.log("Student name", studentName)
 
     if (!notebookId || !studentEmail) {
         resultsContainer.innerHTML = '<div class="alert alert-danger">Please select a notebook and enter a student email.</div>';
         return;
     }
+
+    // Set loading state
+    addButton.disabled = true;
+    addButton.innerHTML = 'Loading...';
 
     try {
         const response = await fetch(`${API_BASE_URL}/notebooks/${notebookId}/students`, {
@@ -940,7 +1055,9 @@
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${userToken}`
             },
-            body: JSON.stringify({ students: [studentEmail] })
+            body: JSON.stringify({ 
+                students: [{ email: studentEmail, name: studentName }] 
+            })
         });
 
         const result = await response.json();
@@ -951,7 +1068,8 @@
                     Student ${studentEmail} added successfully to notebook.
                 </div>
             `;
-            studentEmailInput.value = ''; // Clear input
+            studentEmailInput.value = '';
+            studentNameInput.value = ''; // Clear input
         } else {
             resultsContainer.innerHTML = `
                 <div class="alert alert-danger">
@@ -965,13 +1083,20 @@
                 Error adding student: ${error.message}
             </div>
         `;
+    } finally {
+        // Reset loading state
+        addButton.disabled = false;
+        addButton.innerHTML = 'Add Student';
     }
 }
+
+
 
 async function uploadStudentCsv() {
     const notebookSelect = document.getElementById('notebookSelect');
     const csvFileInput = document.getElementById('studentCsv');
     const resultsContainer = document.getElementById('studentImportResults');
+    const importButton = document.querySelector('.btn-primary[onclick="uploadStudentCsv()"]'); // Ambil tombol import spesifik
 
     const notebookId = notebookSelect.value;
     const csvFile = csvFileInput.files[0];
@@ -980,6 +1105,10 @@ async function uploadStudentCsv() {
         resultsContainer.innerHTML = '<div class="alert alert-danger">Please select a notebook and a CSV file.</div>';
         return;
     }
+
+    // Set loading state
+    importButton.disabled = true;
+    importButton.innerHTML = 'Importing...';
 
     const reader = new FileReader();
     reader.onload = async (e) => {
@@ -1004,8 +1133,9 @@ async function uploadStudentCsv() {
                 resultsContainer.innerHTML = `
                     <div class="alert alert-success">
                         ${result.message}
-                        <br>Valid Students: ${result.validStudents.join(', ')}
-                        <br>Already Assigned: ${result.alreadyAssignedStudents.join(', ')}
+                        // <br>Valid Students: ${result.validStudents.join(', ') || 'None'}
+                        // <br>Already Assigned: ${result.alreadyAssignedStudents.join(', ') || 'None'}
+                        // <br>Invalid Entries: ${result.invalidEntries.length > 0 ? result.invalidEntries.map(e => `Line ${e.line}: ${e.content} (${e.reason})`).join('<br>') : 'None'}
                     </div>
                 `;
                 csvFileInput.value = ''; // Clear file input
@@ -1022,36 +1152,58 @@ async function uploadStudentCsv() {
                     Error importing students: ${error.message}
                 </div>
             `;
+        } finally {
+            // Reset loading state
+            importButton.disabled = false;
+            importButton.innerHTML = 'Import Students';
         }
     };
 
     reader.readAsText(csvFile);
 }
 
+
 // Populate notebook dropdown when modal opens
 function populateNotebookDropdown() {
     const notebookSelect = document.getElementById('notebookSelect');
+    
+    // Kosongkan dropdown sebelum menambahkan opsi baru
     notebookSelect.innerHTML = '<option value="">Select a Notebook</option>';
     
+    // if (!notebooks || notebooks.length === 0) {
+    //     console.log("Notebooks kosong atau tidak terdefinisi!");
+    //     return;
+    // }
+
     notebooks.forEach(notebook => {
         const option = document.createElement('option');
-        option.value = notebook.id || notebook.name;
+        option.value = notebook.id;
         option.textContent = notebook.name;
         notebookSelect.appendChild(option);
     });
-}
 
-// Add this to your existing event listeners
-document.addEventListener('DOMContentLoaded', function() {
+    console.log("Notebook options ditambahkan!");
+    // console.log("Notebook yang di-load:", notebooks);
+
+}
+document.addEventListener("DOMContentLoaded", function() {
+    populateNotebookDropdown(); // Panggil saat halaman dimuat
+    
     const addStudentsBtn = document.getElementById('addStudentsBtn');
     if (addStudentsBtn) {
         addStudentsBtn.addEventListener('click', populateNotebookDropdown);
     }
+
+    const notebookSelect = document.getElementById('notebookSelect');
+    if (notebookSelect) {
+        notebookSelect.addEventListener('click', populateNotebookDropdown );
+    }
 });
+
 
     window.onload = function() {
         google.accounts.id.initialize({
-            client_id: "294376282666-lllnj1ro4d5qu3iq21nmmasr16tjije5.apps.googleusercontent.com",
+            client_id: "",
             callback: handleCredentialResponse
         });
         google.accounts.id.renderButton(
