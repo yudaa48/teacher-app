@@ -11,8 +11,9 @@
   ],
   "host_permissions": [
     "https://notebooklm.google.com/*",
-    "https://dev-dot-funkeai.uc.r.appspot.com/*",
-    "http://localhost:8081/*"
+    "https://funkeai.uc.r.appspot.com/*",
+    "https://ai-dot-funkeai.uc.r.appspot.com/*",
+    "http://localhost:8080/*"
   ],
   "content_scripts": [
     {

@@ -2,7 +2,7 @@
 
 // Constants
 // const API_BASE_URL = 'https://funkeai.uc.r.appspot.com/api';
-const API_BASE_URL = 'https://dev-dot-funkeai.uc.r.appspot.com/api';
+const API_BASE_URL = 'https://ai-dot-funkeai.uc.r.appspot.com/api';
 
 // Create a centralized authentication handler
 const AuthManager = {

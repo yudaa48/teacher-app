@@ -34,7 +34,7 @@ const USER_KIND = 'User';
 const CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
 const client = new OAuth2Client(CLIENT_ID, CLIENT_SECRET);
-
+const API_BASE_URL = 'https://ai-dot-funkeai.uc.r.appspot.com/api'
 const userRoleCache = new Map(); // Simple in-memory cache
 const CACHE_TTL = 300000; // 5 minutes in milliseconds
 
@@ -505,7 +505,8 @@ const NOTEBOOK_STUDENT_KIND = 'NotebookStudent';
 
 // Add a route to handle Google authentication for students
 app.get('/api/auth/google', (req, res) => {
-  const redirectUri = `${req.protocol}://${req.get('host')}/api/auth/google/callback`;
+  // const redirectUri = `${req.protocol}://${req.get('host')}/api/auth/google/callback`;
+  const redirectUri = `${API_BASE_URL}/auth/google/callback`;
   console.log('Using redirect URI:', redirectUri);
   
   const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${CLIENT_ID}&response_type=code&scope=email%20profile&redirect_uri=${encodeURIComponent(redirectUri)}&prompt=select_account`;
@@ -536,12 +537,17 @@ app.get('/api/auth/google/callback', async (req, res) => {
           `);
       }
       
+      console.log('Protocol:', req.protocol);
+      console.log('Host:', req.get('host'));
+
+      const redirectUri = `${API_BASE_URL}/auth/google/callback`;
       // Exchange code for tokens
       const tokenResponse = await client.getToken({
           code: code,
           client_id: CLIENT_ID,
           client_secret: CLIENT_SECRET,
-          redirect_uri: `${req.protocol}://${req.get('host')}/api/auth/google/callback`
+          redirect_uri: redirectUri
+          // redirect_uri: `${req.protocol}://${req.get('host')}/api/auth/google/callback`
       });
       
       const idToken = tokenResponse.tokens.id_token;
@@ -1485,7 +1491,7 @@ app.get('/api/student/auth-status', authenticateStudent, async (req, res) => {
 });
 
 // Start the server
-const PORT = process.env.PORT || 8081;
+const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
