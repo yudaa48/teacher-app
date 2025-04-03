@@ -1,7 +1,8 @@
 // NADU Extension Background Script
 
 // Constants
-const API_BASE_URL = 'https://ai-dot-funkeai.uc.r.appspot.com/api';
+// const API_BASE_URL = 'http://localhost:8080/api';
+const API_BASE_URL = 'https://ai-dot-funkeai.uc.r.appspot.com/api'
 let authToken = null;
 let userData = null;
 

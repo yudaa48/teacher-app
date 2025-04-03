@@ -221,11 +221,221 @@ app.get('/api/notebooks', authenticate, async (req, res) => {
     // Kirim respons ke client hanya sekali
     res.json({ notebooks: formattedNotebooks });
 
-    console.log(`Formatted data:`, formattedNotebooks);
+    // console.log(`Formatted data:`, formattedNotebooks);
   } catch (error) {
     console.error(`Database error fetching notebooks: ${error.message}`);
     console.error(error.stack);
     res.status(500).json({ error: 'Failed to fetch notebooks' });
+  }
+});
+
+// API endpoint to get all notebook is assign to student for teacher
+app.get('/api/students/notebooks/teacher', authenticate, async (req, res) => {
+  try {
+    const userEmail = req.user.email;
+
+    // Cek apakah user adalah seorang teacher
+    if (!(await isTeacher(userEmail))) {
+      console.log(`User ${userEmail} attempted to access notebooks but is not a teacher`);
+      return res.status(403).json({ error: 'Not authorized to access notebooks' });
+    }
+
+    console.log(`Fetching notebooks student for user: ${userEmail}`);
+
+    // Ambil semua data dari NOTEBOOK_STUDENT_KIND
+    const queryNotebookStudent = datastore.createQuery(NOTEBOOK_STUDENT_KIND);
+    const [notebookStudents] = await datastore.runQuery(queryNotebookStudent);
+
+    if (!notebookStudents.length) {
+      return res.status(404).json({ message: 'No notebook students found' });
+    }
+
+    // Ambil semua unique notebookId dari NOTEBOOK_STUDENT_KIND
+    const notebookIds = [...new Set(notebookStudents.map(ns => ns.notebookId))];
+
+    if (notebookIds.length === 0) {
+      return res.status(404).json({ message: 'No associated notebooks found' });
+    }
+
+    // Query untuk mengambil data dari NOTEBOOK_KIND berdasarkan notebookId
+    const notebookKeys = notebookIds.map(id => datastore.key([NOTEBOOK_KIND, parseInt(id)]));
+
+    console.log('Notebook IDs:', notebookIds); // Log daftar notebookId yang akan diambil
+    console.log('Notebook Keys:', notebookKeys); // Log daftar kunci yang digunakan untuk query
+
+    // Ambil data dari NOTEBOOK_KIND
+    const [notebooks] = await datastore.get(notebookKeys);
+
+    console.log('Notebook Data:', notebooks); // Log data yang diambil dari NOTEBOOK_KIND
+
+    // Buat mapping notebookId -> notebookName
+    const notebookMap = notebooks.reduce((acc, notebook) => {
+      const key = notebook[datastore.KEY]?.id?.toString(); // Pastikan key aman
+      if (key) {
+        acc[key] = notebook.name || 'Unknown'; // Gunakan 'Unknown' jika name tidak ditemukan
+      }
+      return acc;
+    }, {});
+
+    console.log('NOTEBOOK_KIND Mapping:', notebookMap); // Log hasil pemetaan notebookId -> notebookName
+
+    // Gabungkan data dari NOTEBOOK_STUDENT_KIND dengan nama notebook dari NOTEBOOK_KIND
+    const result = notebookStudents.map(studentNotebook => ({
+      id: studentNotebook[datastore.KEY].id,
+      assignedAt: studentNotebook.assignedAt,
+      assignedBy: studentNotebook.assignedBy,
+      studentEmail: studentNotebook.studentEmail,
+      studentName: studentNotebook.studentName || 'Unknown', // Jika studentName undefined
+      notebookId: studentNotebook.notebookId,
+      notebookName: notebookMap[studentNotebook.notebookId] || 'Unknown' // Gunakan notebookMap
+    }));
+
+    console.log('Fetched Notebook Student:', result);
+    res.status(200).json(result);
+  } catch (error) {
+    console.error(`Database error fetching notebook student: ${error.message}`);
+    console.error(error.stack);
+    res.status(500).json({ error: 'Failed to fetch notebook students' });
+  }
+});
+
+// API endpoint to get student data based on notebooks assigned by a teacher
+app.get('/api/students/notebooks/assignment/teacher', authenticate, async (req, res) => {
+  let userEmail;
+  try {
+    userEmail = req.user.email;
+
+    // Check if the user is a teacher
+    if (!(await isTeacher(userEmail))) {
+      console.log(`User ${userEmail} attempted to access notebooks but is not a teacher`);
+      return res.status(403).json({ error: 'Not authorized to access notebooks' });
+    }
+
+    console.log(`Fetching student notebooks assigned by: ${userEmail}`);
+
+    // Query to fetch all notebooks created by the teacher
+    const queryNotebook = datastore
+      .createQuery(NOTEBOOK_KIND)
+      .filter('createdBy', '=', userEmail);
+
+    const [notebooks] = await datastore.runQuery(queryNotebook);
+    console.log(`Found ${notebooks.length} notebooks in notebook kind for user ${userEmail}`);
+
+    const notebookDetails = [];
+
+    for (const notebook of notebooks) {
+      const notebookKey = notebook[datastore.KEY]; // Mengambil Key
+      const notebookId = notebookKey ? notebookKey.id : null; // Mengambil ID dari Key
+
+      if (!notebookId) {
+        console.warn(`Skipping notebook without ID: ${JSON.stringify(notebook)}`);
+        continue;
+      }
+
+      // Query untuk mendapatkan siswa terkait dengan notebookId
+      const queryStudent = datastore
+        .createQuery(NOTEBOOK_STUDENT_KIND)
+        .filter('notebookId', '=', notebookId);
+
+      const [students] = await datastore.runQuery(queryStudent);
+
+      students.forEach(student => {
+        notebookDetails.push({
+          notebookId,
+          studentName: student.studentName,
+          studentEmail: student.studentEmail,
+          notebookName: notebook.name || 'Untitled',
+          playlist: Array.isArray(notebook.playlist) ? notebook.playlist : [], // Pastikan playlist adalah array
+          createdBy: notebook.createdBy || 'Unknown'
+        });
+      });
+    }
+
+    res.json({ notebooks: notebookDetails });
+
+
+  } catch (error) {
+    console.error(`Database error fetching student notebooks assigned by ${userEmail || 'unknown user'}: ${error.message}`);
+    console.error(error.stack);
+    res.status(500).json({ error: 'Failed to fetch notebook students' });
+  }
+});
+
+// API endpoint to get teacher data based on notebooks created by a teacher
+
+// API endpoint to get all students for a teacher
+app.get('/api/students/teacher', authenticate, async (req, res) => {
+  try {
+    const userEmail = req.user.email;
+    
+    // Check if user is a teacher
+    if (!(await isTeacher(userEmail))) {
+      console.log(`User ${userEmail} attempted to access student data but is not a teacher`);
+      return res.status(403).json({ error: 'Not authorized to access student data' });
+    }
+
+    console.log(`Fetching students for user: ${userEmail}`);
+    
+    // Query for all students in the datastore
+    const query = datastore.createQuery(STUDENT_KIND);
+    
+    const [students] = await datastore.runQuery(query);
+    console.log(`Found ${students.length} students`);
+    
+    // Format data so ID can be used
+    const formattedStudents = students.map(student => ({
+      id: student[datastore.KEY]?.id || student[datastore.KEY]?.name, // Get ID or Name
+      createdAt: student.createdAt, 
+      email: student.email, 
+      name: student.name 
+    }));
+
+    // Send response with formatted student data
+    res.json({ students: formattedStudents });
+
+    // console.log(`Formatted data:`, formattedStudents);
+  } catch (error) {
+    console.error(`Database error fetching students: ${error.message}`);
+    console.error(error.stack);
+    res.status(500).json({ error: 'Failed to fetch students' });
+  }
+});
+
+// API endpoint to get all teachers for a teacher
+app.get('/api/user/teacher', authenticate, async (req, res) => {
+  try {
+    const userEmail = req.user.email;
+    
+    // Check if user is a teacher
+    if (!(await isTeacher(userEmail))) {
+      console.log(`User ${userEmail} attempted to access teacher data but is not a teacher`);
+      return res.status(403).json({ error: 'Not authorized to access teacher data' });
+    }
+
+    console.log(`Fetching teachers for user: ${userEmail}`);
+    
+    // Query for all teachers in the datastore
+    const query = datastore.createQuery(USER_KIND);
+    
+    const [teachers] = await datastore.runQuery(query);  // Change to teachers
+    console.log(`Found ${teachers.length} teachers`);
+    
+    // Format data so ID can be used
+    const formattedTeachers = teachers.map(teacher => ({  // Change student to teacher
+      id: teacher[datastore.KEY]?.id || teacher[datastore.KEY]?.name, 
+      email: teacher.email,
+      registeredBy: teacher.registeredBy,
+      createdAt: teacher.createdAt, 
+    }));
+
+    // Send response with formatted teacher data
+    res.json({ teachers: formattedTeachers });
+
+    // console.log(`Formatted data:`, formattedTeachers);
+  } catch (error) {
+    console.error(`Database error fetching teachers: ${error.message}`);
+    console.error(error.stack);
+    res.status(500).json({ error: 'Failed to fetch teachers' });
   }
 });
 
