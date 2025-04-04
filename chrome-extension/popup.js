@@ -1,8 +1,8 @@
 // popup.js - Fixed with popup window authentication
 
 // Constants
-// const API_BASE_URL = 'https://funkeai.uc.r.appspot.com/api';
 const API_BASE_URL = 'https://ai-dot-funkeai.uc.r.appspot.com/api';
+// const API_BASE_URL = 'http://localhost:8080/api';
 
 // Create a centralized authentication handler
 const AuthManager = {
