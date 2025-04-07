@@ -34,7 +34,8 @@ const USER_KIND = 'User';
 const CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
 const client = new OAuth2Client(CLIENT_ID, CLIENT_SECRET);
-const API_BASE_URL = 'https://ai-dot-funkeai.uc.r.appspot.com/api'
+const API_BASE_URL = 'https://getfunke.com/api'
+// const API_BASE_URL = 'http://localhost:8080/api'
 const userRoleCache = new Map(); // Simple in-memory cache
 const CACHE_TTL = 300000; // 5 minutes in milliseconds
 

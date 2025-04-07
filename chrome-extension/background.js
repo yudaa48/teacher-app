@@ -2,7 +2,7 @@
 
 // Constants
 // const API_BASE_URL = 'http://localhost:8080/api';
-const API_BASE_URL = 'https://ai-dot-funkeai.uc.r.appspot.com/api'
+const API_BASE_URL = 'https://getfunke.com/api'
 let authToken = null;
 let userData = null;
 
@@ -30,7 +30,7 @@ function injectContentScriptOnAuthenticatedTabs() {
 
 // Initialize when extension is installed or updated
 chrome.runtime.onInstalled.addListener(() => {
-    console.log("NADU Extension installed.");
+    console.log("NISU Extension installed.");
     
     // Check if already authenticated
     chrome.storage.local.get(['authToken', 'userData'], function(data) {
@@ -41,11 +41,27 @@ chrome.runtime.onInstalled.addListener(() => {
         }
     });
 });
+chrome.storage.onChanged.addListener(function(changes, namespace) {
+    if (changes.authToken) {
+        console.log("AuthToken changed:", changes.authToken);
+    }
+});
 
 // Message handler for various extension actions
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     console.log("Background received message:", message.action);
-    
+   // Handle openPopup action
+    if (message.action === 'openPopup') {
+        try {
+            chrome.action.openPopup();
+            console.log("Opening popup...");
+        } catch (error) {
+            console.error("Error opening popup:", error);
+            chrome.tabs.create({ url: "popup.html" });
+        }
+        return true; 
+    }
+
     // Authentication status check
     if (message.action === "checkAuth") {
         sendResponse({ 

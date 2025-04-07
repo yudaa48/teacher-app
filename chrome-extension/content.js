@@ -59,15 +59,15 @@
             console.log("Authentication check complete:", isAuthenticated, userData);
             if (!isAuthenticated) {
                 // User is not authenticated, update bubble text
-                updateBubbleText("Please click the extension icon to sign in");
+                updateBubbleText("Click to sign in to NISU extension");
                 
-                // When the overlay or bubble is clicked, show sign-in prompt
+                // When the overlay or bubble is clicked, open the popup
                 img.addEventListener("click", function() {
-                    alert("Please click the NISU extension icon in your browser toolbar to sign in.");
+                    chrome.runtime.sendMessage({ action: 'openPopup' });
                 });
                 
                 bubble.addEventListener("click", function() {
-                    alert("Please click the NISU extension icon in your browser toolbar to sign in.");
+                    chrome.runtime.sendMessage({ action: 'openPopup' });
                 });
                 
                 return;
@@ -101,7 +101,7 @@
             });
         }
 
-        // Get the current notebook name from the URL
+
         // function getCurrentNotebookName() {
         //     const url = window.location.href;
         //     console.log("Current URL:", url);
@@ -133,25 +133,43 @@
                 
         //         // Pattern 3: /notebook/[notebookId]
         //         if (parts.length >= 3 && parts[1] === 'notebook') {
-        //             // Get notebook ID
+        //             // Get notebook ID from URL
         //             const notebookId = parts[2];
+        //             console.log("Found notebook ID in URL:", notebookId);
                     
-        //             // Try to find notebook name from chrome.storage mapping
-        //             return getNotebookNameFromId(notebookId, function(name) {
-        //                 if (name) {
-        //                     return name;
-        //                 }
-                        
-        //                 // For development: detect notebook by title
-        //                 const notebookTitle = document.title.replace(" - NotebookLM", "").trim();
-        //                 if (notebookTitle && notebookTitle !== "NotebookLM" && notebookTitle !== "Untitled notebook") {
-        //                     console.log("Found notebook name from title:", notebookTitle);
-        //                     return notebookTitle;
-        //                 }
-                        
-        //                 // Default notebook name for testing
-        //                 console.log("Using default notebook name for testing: 'Sample Biology Notebook'");
-        //                 return "Sample Biology Notebook";
+        //             // Return a promise to handle the async storage operation
+        //             return new Promise((resolve) => {
+        //                 // Try to get notebook name from storage
+        //                 chrome.storage.local.get('lastOpenedNotebook', function(data) {
+        //                     if (chrome.runtime.lastError) {
+        //                         console.error("Error accessing storage:", chrome.runtime.lastError);
+        //                     }
+                            
+        //                     if (data && data.lastOpenedNotebook) {
+        //                         const storedNotebook = data.lastOpenedNotebook;
+        //                         console.log("Retrieved from storage:", storedNotebook);
+                                
+        //                         // Check if this is the same notebook (by ID or idFromNotebookLM)
+        //                         if (storedNotebook.id === notebookId || 
+        //                             (storedNotebook.idFromNotebookLM && storedNotebook.idFromNotebookLM === notebookId)) {
+        //                             console.log("Found matching notebook in storage with name:", storedNotebook.name);
+        //                             resolve(storedNotebook.name);
+        //                             return;
+        //                         }
+        //                     }
+                            
+        //                     // Fallback to title if storage lookup failed
+        //                     const notebookTitle = document.title.replace(" - NotebookLM", "").trim();
+        //                     if (notebookTitle && notebookTitle !== "NotebookLM" && notebookTitle !== "Untitled notebook") {
+        //                         console.log("Found notebook name from title:", notebookTitle);
+        //                         resolve(notebookTitle);
+        //                         return;
+        //                     }
+                            
+        //                     // Default notebook name as last resort
+        //                     console.log("Using default notebook name: 'Sample Biology Notebook'");
+        //                     resolve("Sample Biology Notebook");
+        //                 });
         //             });
         //         }
                 
@@ -171,7 +189,7 @@
                 
         //         // Default notebook name for testing (allow testing on any page)
         //         console.log("Using default notebook name for testing: 'Sample Biology Notebook'");
-        //         return "Sample Biology Notebook"; 
+        //         return "Sample Biology Notebook";
         //     } catch (e) {
         //         console.error("Error parsing URL:", e);
         //         return "Sample Biology Notebook"; // Fallback for testing
@@ -179,53 +197,30 @@
         // }
 
         function getCurrentNotebookName() {
-            const url = window.location.href;
-            console.log("Current URL:", url);
-            
             try {
-                // Parse the URL
-                const parsedUrl = new URL(url);
-                console.log("Parsed URL:", parsedUrl);
+                const url = new URL(window.location.href);
+                console.log("Current URL:", url);
                 
-                // If we're on the main page (empty path or just "/")
-                if (parsedUrl.pathname === "/" || parsedUrl.pathname === "") {
-                    console.log("On NotebookLM main page - no specific notebook");
-                    updateBubbleText("Please open a notebook first");
-                    return null;
-                }
-                
-                const parts = parsedUrl.pathname.split('/');
+                const parts = url.pathname.split('/');
                 console.log("URL path parts:", parts);
                 
-                // Pattern 1: /app/[notebookName]
-                if (parts.length >= 3 && parts[1] === 'app') {
-                    return decodeURIComponent(parts[2]);
-                }
-                
-                // Pattern 2: /notebooks/[notebookId]/[notebookName]
-                if (parts.length >= 4 && parts[1] === 'notebooks') {
-                    return decodeURIComponent(parts[3]);
-                }
-                
-                // Pattern 3: /notebook/[notebookId]
+                // Pola: /notebook/[notebookId]
                 if (parts.length >= 3 && parts[1] === 'notebook') {
-                    // Get notebook ID from URL
                     const notebookId = parts[2];
                     console.log("Found notebook ID in URL:", notebookId);
                     
-                    // Return a promise to handle the async storage operation
                     return new Promise((resolve) => {
-                        // Try to get notebook name from storage
                         chrome.storage.local.get('lastOpenedNotebook', function(data) {
                             if (chrome.runtime.lastError) {
                                 console.error("Error accessing storage:", chrome.runtime.lastError);
+                                resolve(null);
+                                return;
                             }
                             
                             if (data && data.lastOpenedNotebook) {
                                 const storedNotebook = data.lastOpenedNotebook;
                                 console.log("Retrieved from storage:", storedNotebook);
                                 
-                                // Check if this is the same notebook (by ID or idFromNotebookLM)
                                 if (storedNotebook.id === notebookId || 
                                     (storedNotebook.idFromNotebookLM && storedNotebook.idFromNotebookLM === notebookId)) {
                                     console.log("Found matching notebook in storage with name:", storedNotebook.name);
@@ -234,43 +229,20 @@
                                 }
                             }
                             
-                            // Fallback to title if storage lookup failed
-                            const notebookTitle = document.title.replace(" - NotebookLM", "").trim();
-                            if (notebookTitle && notebookTitle !== "NotebookLM" && notebookTitle !== "Untitled notebook") {
-                                console.log("Found notebook name from title:", notebookTitle);
-                                resolve(notebookTitle);
-                                return;
-                            }
-                            
-                            // Default notebook name as last resort
-                            console.log("Using default notebook name: 'Sample Biology Notebook'");
-                            resolve("Sample Biology Notebook");
+                            console.log("Notebook name not found in storage.");
+                            resolve(null);
                         });
                     });
                 }
                 
-                // For development: detect notebook by title
-                const notebookTitle = document.title.replace(" - NotebookLM", "").trim();
-                if (notebookTitle && notebookTitle !== "NotebookLM" && notebookTitle !== "Untitled notebook") {
-                    console.log("Found notebook name from title:", notebookTitle);
-                    return notebookTitle;
-                }
-                
-                // If all else fails, try to get Notebook name from URL search params (for NLM beta versions)
-                if (parsedUrl.searchParams.has("notebook")) {
-                    const notebookFromParams = parsedUrl.searchParams.get("notebook");
-                    console.log("Found notebook name from search params:", notebookFromParams);
-                    return notebookFromParams;
-                }
-                
-                // Default notebook name for testing (allow testing on any page)
-                console.log("Using default notebook name for testing: 'Sample Biology Notebook'");
-                return "Sample Biology Notebook";
+                console.log("Notebook ID not found in URL.");
+                return null;
             } catch (e) {
                 console.error("Error parsing URL:", e);
-                return "Sample Biology Notebook"; // Fallback for testing
+                return null;
             }
         }
+        
 
         // Helper to get notebook name from ID using chrome.storage
         function getNotebookNameFromId(notebookId, callback) {
@@ -281,7 +253,6 @@
         }
 
         // Merge a freshly fetched playlist with the locally stored one,
-        // preserving the status of tasks that have already been executed.
         function mergePlaylist(newPlaylist, storedPlaylist) {
             console.log("Merging playlists:", { new: newPlaylist, stored: storedPlaylist });
             
@@ -357,7 +328,6 @@
         }
 
         // Refresh the playlist by fetching from the database API
-        // This is called every time the overlay or bubble is clicked.
         function refreshPlaylist(callback) {
             console.log("Refreshing playlist");
             
@@ -461,6 +431,7 @@
             }
         }
 
+        
         // Helper: Transform a media URL for embeddable players.
         function transformMediaUrl(url) {
             console.log("Transforming media URL:", url);
