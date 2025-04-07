@@ -754,54 +754,61 @@
 
         // Runs the next task in the playlist.
         function runNextItem() {
-            console.log("Running next item");
-            // Get the current notebook name
-            const notebookName = getCurrentNotebookName();
-            if (!notebookName) {
-                console.error("Could not determine notebook name from URL");
-                updateBubbleText("Please open a notebook first");
-                // Fallback: Use a default method to get playlist
-                chrome.runtime.sendMessage({ 
-                    action: "fetchInstructions"
-                }, function (response) {
-                    console.log("Fallback instructions fetch response:", response);
-                    if (response && response.success) {
-                        let playlist = response.data.playlist;
-                        processPlaylist(playlist);
-                    } else {
-                        updateBubbleText("Error loading content. Please try again.");
+            checkAuthentication(function(isAuthenticated, userData) {
+                if (!isAuthenticated) {
+                    console.warn("User not authenticated. Aborting runNextItem.");
+                    updateBubbleText("Please log in first.");
+                    chrome.runtime.sendMessage({ action: 'openPopup' });
+                    return;
+                }
+        
+                console.log("Running next item");
+        
+                const notebookName = getCurrentNotebookName();
+                if (!notebookName) {
+                    console.error("Could not determine notebook name from URL");
+                    updateBubbleText("Please open a notebook first");
+                    chrome.runtime.sendMessage({ 
+                        action: "fetchInstructions"
+                    }, function (response) {
+                        console.log("Fallback instructions fetch response:", response);
+                        if (response && response.success) {
+                            let playlist = response.data.playlist;
+                            processPlaylist(playlist);
+                        } else {
+                            updateBubbleText("Error loading content. Please try again.");
+                        }
+                    });
+                    return;
+                }
+        
+                refreshPlaylist(function (playlist, index) {
+                    console.log("Playlist refreshed, index:", index, "length:", playlist ? playlist.length : 0);
+                    if (!playlist || playlist.length === 0) {
+                        updateBubbleText("No tasks available for this notebook.");
+                        return;
                     }
-                });
-                return;
-            }
-            
-            refreshPlaylist(function (playlist, index) {
-                console.log("Playlist refreshed, index:", index, "length:", playlist ? playlist.length : 0);
-                if (!playlist || playlist.length === 0) {
-                    updateBubbleText("No tasks available for this notebook.");
-                    return;
-                }
-                
-                if (index >= playlist.length) {
-                    updateBubbleText("Great job, no tasks left!");
-                    return;
-                }
-                
-                let item = playlist[index];
-                console.log("Executing item:", item);
-                executeCommand(item, function () {
-                    item.status = "complete";
-                    
-                    // Update progress in the database
-                    updateProgress(notebookName, item.id, true, function() {
-                        index++;
-                        chrome.storage.local.set({ nisuPlaylist: playlist, nisuCurrentIndex: index }, function () {
-                            updateBubbleText("Click me for more");
+        
+                    if (index >= playlist.length) {
+                        updateBubbleText("Great job, no tasks left!");
+                        return;
+                    }
+        
+                    let item = playlist[index];
+                    console.log("Executing item:", item);
+                    executeCommand(item, function () {
+                        item.status = "complete";
+                        updateProgress(notebookName, item.id, true, function () {
+                            index++;
+                            chrome.storage.local.set({ nisuPlaylist: playlist, nisuCurrentIndex: index }, function () {
+                                updateBubbleText("Click me for more");
+                            });
                         });
                     });
                 });
             });
         }
+        
 
         // Listen for direct commands from the student interface
         chrome.runtime.onMessage.addListener(function(message, sender, sendResponse) {
