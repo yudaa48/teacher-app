@@ -1,7 +1,7 @@
 // popup.js - Fixed with popup window authentication
 
 // Constants
-const API_BASE_URL = 'https://ai-dot-funkeai.uc.r.appspot.com/api';
+const API_BASE_URL = 'https://getfunke.com/api';
 // const API_BASE_URL = 'http://localhost:8080/api';
 
 // Create a centralized authentication handler
@@ -307,10 +307,6 @@ function openNotebook(notebook) {
     if (notebook.idFromNotebookLM) {
         notebookURL = `https://notebooklm.google.com/notebook/${notebook.idFromNotebookLM}`;
         console.log("Generated URL using idFromNotebookLM:", notebookURL);
-    } else {
-        // Jika tidak ada idFromNotebookLM, fallback ke id biasa
-        notebookURL = `https://notebooklm.google.com/notebook/${notebook.id}`;
-        console.log("Generated URL using notebook ID:", notebookURL);
     }
 
     // Buka di tab baru
