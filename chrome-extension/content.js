@@ -256,7 +256,6 @@
         function mergePlaylist(newPlaylist, storedPlaylist) {
             console.log("Merging playlists:", { new: newPlaylist, stored: storedPlaylist });
             
-            // Handle null or undefined inputs
             if (!newPlaylist || !Array.isArray(newPlaylist)) {
                 console.error("Invalid newPlaylist:", newPlaylist);
                 return storedPlaylist || [];
@@ -265,8 +264,7 @@
             if (!storedPlaylist || !Array.isArray(storedPlaylist)) {
                 console.log("No stored playlist, using new playlist");
                 return newPlaylist.map(item => {
-                    item.status = "pending";
-                    return item;
+                    return { ...item, status: "pending" };
                 });
             }
             
@@ -285,17 +283,16 @@
                     console.warn("Invalid playlist item:", item);
                     return null;
                 }
-                
+
                 if (item.type) {
                     item.type = item.type.trim().toLowerCase();
                 }
-                
+
                 if (storedDict[item.id]) {
-                    return storedDict[item.id];
+                    return { ...item, status: storedDict[item.id].status };
                 } else {
-                    item.status = "pending";
-                    return item;
-                }
+                    return { ...item, status: item.status || "pending" };
+                }                
             }).filter(item => item !== null);
             
             return merged;
