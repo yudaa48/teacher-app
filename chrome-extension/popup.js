@@ -107,7 +107,7 @@ document.addEventListener('DOMContentLoaded', function() {
         AuthManager.openAuthWindow();
     });
     if (signOutButton) signOutButton.addEventListener('click', signOut);
-    if (activateButton) activateButton.addEventListener('click', activateOnCurrentPage);
+    // if (activateButton) activateButton.addEventListener('click', activateOnCurrentPage);
 });
 
 function showLoginView() {

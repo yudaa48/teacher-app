@@ -28,23 +28,42 @@ function injectContentScriptOnAuthenticatedTabs() {
     });
 }
 
-// Initialize when extension is installed or updated
-chrome.runtime.onInstalled.addListener(() => {
-    console.log("NISU Extension installed.");
-    
-    // Check if already authenticated
+function loadAuthFromStorage() {
     chrome.storage.local.get(['authToken', 'userData'], function(data) {
         if (data.authToken && data.userData) {
             authToken = data.authToken;
             userData = data.userData;
-            console.log("User already authenticated:", userData.email);
+            console.log("✅ Auth loaded:", userData.email);
+        } else {
+            console.log("⛔ No auth found.");
         }
     });
-});
+}
+
+// Listen for changes in storage (update in-memory variables)
 chrome.storage.onChanged.addListener(function(changes, namespace) {
     if (changes.authToken) {
-        console.log("AuthToken changed:", changes.authToken);
+        authToken = changes.authToken.newValue;
+        console.log("🔁 Updated authToken in memory");
     }
+    if (changes.userData) {
+        userData = changes.userData.newValue;
+        console.log("🔁 Updated userData in memory");
+    }
+});
+
+// Call once when background starts
+loadAuthFromStorage();
+
+// When extension installed or updated
+chrome.runtime.onInstalled.addListener(() => {
+    console.log("📦 Extension installed or updated");
+});
+
+// When browser restarts
+chrome.runtime.onStartup.addListener(() => {
+    console.log("🔄 Extension background resumed");
+    loadAuthFromStorage();
 });
 
 // Message handler for various extension actions
@@ -64,12 +83,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     // Authentication status check
     if (message.action === "checkAuth") {
-        sendResponse({ 
-            isAuthenticated: !!authToken, 
-            userData: userData 
+        chrome.storage.local.get(['authToken', 'userData'], (data) => {
+            sendResponse({ 
+                isAuthenticated: !!data.authToken, 
+                userData: data.userData || null
+            });
         });
-        return true;
+        return true; 
     }
+    
     
     // Login handler
     if (message.action === "login") {

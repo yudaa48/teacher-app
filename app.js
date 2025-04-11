@@ -1503,6 +1503,7 @@ app.post('/api/students/import', authenticate, async (req, res) => {
         data: {
           notebookId: notebookId,
           studentEmail: studentEmail,
+          studentName: name,
           assignedBy: teacherEmail,
           assignedAt: new Date().toISOString()
         }

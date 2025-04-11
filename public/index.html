@@ -358,9 +358,10 @@
             <button id="logoutButton" class="btn btn-outline-dark" style="display: none;" onclick="handleSignOut()">Sign
                 Out</button>
             <button id="saveButton" class="btn btn-success ms-2" onclick="saveChanges()" style="display: none;">Save
-                Changes</button>
+                Changes
+            </button>
         </div>
-        <div id="saveMessage" class="save-message">Saved!</div>
+        <div id="saveMessage" class="save-message">Changes Saved Successfully!</div>
     </div>
 
     <!-- Spacer to push content below the fixed header -->
@@ -844,13 +845,16 @@
 
             if (notebooks.length === 0) {
                 notebookList.innerHTML = `
-                <div class="text-center p-3">
-                    <p>No notebooks found.</p>
-                    <p>Create your first notebook to get started!</p>
-                </div>
-            `;
+                    <div class="text-center p-3">
+                        <p>No notebooks found.</p>
+                        <p>Create your first notebook to get started!</p>
+                    </div>
+                `;
                 return;
             }
+
+            // Populate <select>
+                populateNotebookDropdown();
 
             notebooks.forEach(notebook => {
                 const notebookItem = document.createElement('div');
@@ -860,16 +864,17 @@
                 nameSpan.textContent = "📗 " + notebook.name;
                 nameSpan.style.cursor = 'pointer';
 
-                // Klik untuk memilih notebook, menggunakan ID notebook
                 nameSpan.onclick = () => {
-                    console.log(`Notebook clicked: ${notebook.name}`); // Log klik notebook
+                    console.log(`Notebook clicked: ${notebook.name}`);
                     selectNotebook(notebook);
+
+                    const notebookSelect = document.getElementById('notebookSelect');
+                    notebookSelect.value = notebook.id;
                 };
 
                 const deleteBtn = document.createElement('button');
                 deleteBtn.className = 'btn btn-sm btn-danger';
                 deleteBtn.innerHTML = '&times;';
-
                 deleteBtn.onclick = (e) => {
                     e.stopPropagation();
                     deleteNotebook(notebook);
@@ -878,14 +883,13 @@
                 notebookItem.appendChild(nameSpan);
                 notebookItem.appendChild(deleteBtn);
 
-                if (currentNotebook && notebook.id === currentNotebook.id) { // Menggunakan ID untuk menandai yang aktif
+                if (currentNotebook && notebook.id === currentNotebook.id) {
                     notebookItem.classList.add('active');
                 }
 
                 notebookList.appendChild(notebookItem);
             });
         }
-
 
 
         async function deleteNotebook(notebook) {
@@ -942,6 +946,10 @@
 
                 displayTableDataStudent();
                 displayNotebooks();
+
+                document.getElementById('notebookSelect').value = notebook.id;
+                console.log('Selected notebook for notebookSelect', notebook.id)
+
             });
         }
 
@@ -1023,11 +1031,12 @@
             });
             new Sortable(list, {
                 animation: 150,
-                onEnd: function (evt) {
+                onEnd: async function (evt) {
                     const [movedItem] = currentPlaylist.splice(evt.oldIndex, 1);
                     currentPlaylist.splice(evt.newIndex, 0, movedItem);
+
                     displayItems(currentPlaylist);
-                    showSaveButton();
+                    await saveChanges();          
                 }
             });
         }
@@ -1075,7 +1084,7 @@
         }
 
 
-        function addItem() {
+        async function addItem() {
             if (!currentNotebook) {
                 alert('Please select or create a notebook first.');
                 return;
@@ -1100,35 +1109,40 @@
 
             newCommandInput.value = '';
 
-            // console.log("Item added:", newItem, "Updated Playlist:", currentPlaylist);
-
-            if (typeof showSaveButton === 'function') {
-                console.log("Calling showSaveButton()...");
-                showSaveButton();
-            } else {
-                console.error("showSaveButton() is not defined!");
-            }
+            await saveChanges();
         }
-
 
         function showSaveButton() {
             document.getElementById('saveButton').style.display = 'block';
         }
 
-        function editItem(index, value) {
+        async function editItem(index, value) {
             currentPlaylist[index].command = value;
-            showSaveButton();
+            try {
+                await saveChanges();
+            } catch (err) {
+                console.error("Error changes:", err);
+            }
         }
 
-        function updateType(index, value) {
+        async function updateType(index, value) {
             currentPlaylist[index].type = value;
-            showSaveButton();
+
+            try {
+                await saveChanges();
+            } catch (err) {
+                console.error("Error changes:", err);
+            }
         }
 
-        function removeItem(index) {
+        async function removeItem(index) {
             currentPlaylist.splice(index, 1);
             displayItems(currentPlaylist);
-            showSaveButton();
+            try {
+                await saveChanges();
+            } catch (err) {
+                console.error("Error changes:", err);
+            }
         }
 
         async function saveChanges() {
@@ -1136,6 +1150,7 @@
                 alert('Please select or create a notebook first.');
                 return;
             }
+
             try {
                 const response = await fetch(`${API_BASE_URL}/notebooks`, {
                     method: 'POST',
@@ -1149,13 +1164,24 @@
                         playlist: currentPlaylist
                     })
                 });
+                console.log("Sending to API:", {
+                name: currentNotebook.name,
+                idFromNotebookLM: currentNotebook.idFromNotebookLM,
+                playlist: currentPlaylist
+                });
+
+                const result = await response.json(); // Tambahkan ini untuk melihat isi response
+
                 if (!response.ok) {
-                    throw new Error('Failed to save changes to database.');
+                    console.error('Server responded with:', response.status, result);
+                    throw new Error(`Failed to save changes to database. Status: ${response.status}, Message: ${result.message || JSON.stringify(result)}`);
                 }
+
                 const notebookIndex = notebooks.findIndex(n => n.name === currentNotebook.name);
                 if (notebookIndex !== -1) {
                     notebooks[notebookIndex].playlist = currentPlaylist;
                 }
+
                 document.getElementById('saveButton').style.display = 'none';
                 const saveMsg = document.getElementById('saveMessage');
                 saveMsg.style.display = 'block';
@@ -1171,7 +1197,6 @@
                 alert('Error saving changes: ' + error.message);
             }
         }
-
 
         function exportNotebook() {
             if (!currentNotebook) {
@@ -1244,7 +1269,9 @@
                 </div>
             `;
                     studentEmailInput.value = '';
-                    studentNameInput.value = ''; // Clear input
+                    studentNameInput.value = '';
+                    
+                    fetchStudents();
                 } else {
                     resultsContainer.innerHTML = `
                 <div class="alert alert-danger">
@@ -1313,7 +1340,8 @@
                         // <br>Invalid Entries: ${result.invalidEntries.length > 0 ? result.invalidEntries.map(e => `Line ${e.line}: ${e.content} (${e.reason})`).join('<br>') : 'None'}
                     </div>
                 `;
-                        csvFileInput.value = ''; // Clear file input
+                        csvFileInput.value = '';
+                        fetchStudents(); 
                     } else {
                         resultsContainer.innerHTML = `
                     <div class="alert alert-danger">
@@ -1341,39 +1369,46 @@
         // Populate notebook dropdown when modal opens
         function populateNotebookDropdown() {
             const notebookSelect = document.getElementById('notebookSelect');
-
+            const currentValue = notebookSelect.value || selectedNotebookId;
+            
             // Kosongkan dropdown sebelum menambahkan opsi baru
             notebookSelect.innerHTML = '<option value="">Select a Notebook</option>';
-
-            // if (!notebooks || notebooks.length === 0) {
-            //     console.log("Notebooks kosong atau tidak terdefinisi!");
-            //     return;
-            // }
-
             notebooks.forEach(notebook => {
                 const option = document.createElement('option');
                 option.value = notebook.id;
                 option.textContent = notebook.name;
                 notebookSelect.appendChild(option);
             });
-
+            
+            // Kembalikan nilai yang sebelumnya dipilih
+            if (currentValue) {
+                notebookSelect.value = currentValue;
+            }
+            
             console.log("Notebook options ditambahkan!");
-            // console.log("Notebook yang di-load:", notebooks);
-
         }
-        document.addEventListener("DOMContentLoaded", function () {
-            populateNotebookDropdown(); // Panggil saat halaman dimuat
 
+        // Tambahkan event listener untuk menyimpan nilai yang dipilih
+        document.addEventListener("DOMContentLoaded", function () {
             const addStudentsBtn = document.getElementById('addStudentsBtn');
             if (addStudentsBtn) {
                 addStudentsBtn.addEventListener('click', populateNotebookDropdown);
             }
-
+            
             const notebookSelect = document.getElementById('notebookSelect');
             if (notebookSelect) {
                 notebookSelect.addEventListener('click', populateNotebookDropdown);
+                notebookSelect.addEventListener('change', function () {
+                    selectedNotebookId = this.value; // Simpan nilai yang dipilih
+                    const selectedNotebook = notebooks.find(nb => nb.id === selectedNotebookId);
+                    if (selectedNotebook) {
+                        selectNotebook(selectedNotebook);
+                        console.log(`Notebook selected from dropdown: ${selectedNotebook.name}`);
+                    }
+                });
             }
         });
+
 
         // Fungsi untuk menampilkan data dalam tabel
         function displayTableDataNotebook() {
@@ -1465,7 +1500,6 @@
                 return;
             }
 
-            // Filter studentsList berdasarkan ID notebook yang dipilih
             const filteredStudents = studentsList.filter(student => student.notebookId === currentNotebook.id);
 
             const startIndex = (currentPageStudent - 1) * rowsPerPageStudent;
@@ -1475,7 +1509,6 @@
             const tableBody = document.getElementById('studentList');
             tableBody.innerHTML = ''; // Kosongkan tabel sebelum menambahkan data baru
 
-            // Menambahkan data mahasiswa yang terfilter
             if (paginatedData.length === 0) {
                 const noDataRow = document.createElement('tr');
                 noDataRow.innerHTML = `
@@ -1483,7 +1516,6 @@
                 `;
                 tableBody.appendChild(noDataRow);
             } else {
-                // Menambahkan data mahasiswa yang terfilter
                 paginatedData.forEach((student, index) => {
                     // console.log(`Displaying student:`, paginatedData); // Log data yang ditampilkan
                     const row = document.createElement('tr');
@@ -1504,7 +1536,6 @@
                 return;
             }
 
-            // Filter studentsList berdasarkan ID notebook yang dipilih
             const filteredStudents = studentsList.filter(student => student.notebookId === currentNotebook.id);
 
             const startIndex = (currentPageStudent - 1) * rowsPerPageStudent;
@@ -1529,7 +1560,7 @@
 
                     pageLink.addEventListener('click', () => {
                         currentPageStudent = i;
-                        displayTableDataStudent(); // Update tabel ketika halaman berubah
+                        displayTableDataStudent(); h
                     });
 
                     pageItem.appendChild(pageLink);
@@ -1537,52 +1568,56 @@
                 }
             }
 
-            // Display the table data after pagination setup
             displayTableDataStudent();
         }
 
 
-        // Function to switch between tabs
+        let selectedNotebookId = '';
+
+        // Modifikasi fungsi switchTab untuk menyimpan dan mengembalikan nilai
         function switchTab(selectedTab, tabName) {
-            // Remove 'active' class from all tabs and add to the selected one
+            // Simpan nilai yang terpilih sebelum berpindah tab
+            const notebookSelect = document.getElementById('notebookSelect');
+            if (notebookSelect) {
+                selectedNotebookId = notebookSelect.value;
+            }
+            
             document.querySelectorAll("#listTab .nav-link").forEach(tab => tab.classList.remove("active"));
             selectedTab.classList.add("active");
-
-            // Show or hide content based on the selected tab
             document.getElementById("experinceContent").style.display = tabName === "experience" ? "flex" : "none";
             document.getElementById("peopleContent").style.display = tabName === "people" ? "block" : "none";
-
-            // Always keep the notebook list, tabs, current notebook name, and buttons visible
-            document.getElementById("currentNotebookName").style.display = "block";  // Current notebook name stays visible
-            document.getElementById("notebookContent").style.display = "block";  // Current notebook name stays visible
-
-            // People-related content will only be shown if the 'people' tab is selected
+            document.getElementById("currentNotebookName").style.display = "block";  
+            document.getElementById("notebookContent").style.display = "block";  
             if (tabName === "people") {
                 document.getElementById("teacherTable").style.display = "block";
                 document.getElementById("studentTable").style.display = "block";
                 document.getElementById("teacherTitle").style.display = "block";
                 document.getElementById("studentTitle").style.display = "block";
+                
+                // Fetch data saat berpindah ke tab people
+                fetchNotebooks();
+                fetchStudents();
+                
+                // Kembalikan nilai yang tersimpan setelah dropdown diisi ulang
+                setTimeout(() => {
+                    const notebookSelect = document.getElementById('notebookSelect');
+                    if (notebookSelect && selectedNotebookId) {
+                        notebookSelect.value = selectedNotebookId;
+                    }
+                }, 100); // Beri sedikit waktu untuk memastikan dropdown sudah terisi
             } else {
                 document.getElementById("teacherTable").style.display = "none";
                 document.getElementById("studentTable").style.display = "none";
                 document.getElementById("teacherTitle").style.display = "none";
                 document.getElementById("studentTitle").style.display = "none";
             }
-
-            // Fetch data when the "people" tab is selected
-            if (tabName === "people") {
-                fetchNotebooks();
-                fetchStudents();
-            }
         }
 
-        // Call this function when the page loads to set the default active tab to "experience"
         window.onload = function() {
             const defaultTab = document.querySelector('button[onclick="switchTab(this, \'experience\')"]');
             switchTab(defaultTab, 'experience'); // Set "experience" tab as active by default
         }
 
-        // Panggil fetchTeachers(), fetchStudents() pertama kali saat halaman dimuat
         window.onload = fetchNotebooks;
         window.onload = fetchStudents;
 
